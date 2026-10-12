@@ -56,8 +56,7 @@ export class Wllama {
     await page.locator('#chat-tabs [role=tab]').first().press('ArrowRight');
     await page.waitForFunction(()=>document.querySelector('#input').value==='書きかけB');
     assert.equal(await page.locator('#messages').innerText(),'');
-    await page.locator('#prepare-shortcut').click();
-    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('会話できます'));
+    // 「会話を準備」は送信ボタンに統合した。送信すると準備してから答える
     await page.locator('#input').fill('今夜の過ごし方を考えて');
     await page.locator('#send').click();
     await page.waitForFunction(()=>!!window.finishTestGeneration);

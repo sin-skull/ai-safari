@@ -58,9 +58,7 @@ export class Wllama {
     assert.match(multi, /扇風機のおすすめですね。条件を教えてください/);
     assert.equal(await calls(), 0);
 
-    // モデルを準備して、おすすめの条件を答える → 商品名を作らせない指示つきでモデルへ
-    await page.evaluate(() => document.querySelector('#prepare').click());
-    await page.waitForFunction(() => document.querySelector('#status').textContent.includes('会話できます'));
+    // おすすめの条件を答える → 送信だけで準備してから、商品名を作らせない指示つきでモデルへ
     await send('6畳の寝室で、静かなのがいい。予算は1万円');
     const sys = await page.evaluate(() => window.testMessages[0].content);
     assert.match(sys, /「扇風機」のおすすめ/);

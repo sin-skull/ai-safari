@@ -169,7 +169,7 @@ export class ConversationEngine {
   }
   generate(messages, onText, preferences = {}) {
     return this.serial(async () => {
-      if (this.state !== 'ready' || !this.worker) throw new Error('先に「会話を準備」を押してください。');
+      if (this.state !== 'ready' || !this.worker) throw new Error('モデルの準備ができていません。もう一度送信してください。');
       this.controller = new AbortController();
       this.setState('generating');
       let text = '';

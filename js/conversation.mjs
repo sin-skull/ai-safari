@@ -8,7 +8,7 @@ import { openChats, listChats, updateChat, selectChat, addChat, removeChat } fro
 import { closeMenu } from './menu.mjs';
 import { deviceAnswer, isCorrection, applyCorrection, splitRequests, recommendQuestion, recommendInstruction } from './dialog.mjs';
 
-const VERSION = '0.15.0';
+const VERSION = '0.15.1';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';
@@ -64,7 +64,7 @@ const engine = new ConversationEngine(factory, (state) => {
   storage.write(STEP, ['loading', 'generating', 'unloading'].includes(state) ? { state, profile: $('profile').value, at: Date.now() } : null);
   log(state, { profile: $('profile').value });
   if (state === 'generating') setStatus('答えを作っています…');
-  if (state === 'idle') setStatus('待機中です。「会話を準備」で再開できます。');
+  if (state === 'idle') setStatus('待機中です。送信すると、保存済みのモデルから準備します。');
   renderControls();
 });
 
@@ -80,7 +80,6 @@ function renderControls() {
   $('new-chat').disabled = !db || active;
   $('new-chat-top').disabled = !currentChat || active;
   $('prepare-shortcut').disabled = $('prepare').disabled;
-  $('prepare-shortcut').textContent = engine.state === 'ready' ? '準備できました' : '会話を準備';
   for (const id of ['rename-chat', 'delete-chat', 'export-all']) $(id).disabled = !currentChat || active;
   renderTabs(active);
   $('export-chat').disabled = !db || active;
@@ -163,7 +162,7 @@ async function flushDraft() {
 function activateChat(chat) {
   currentChat = chat; history = chat.history; $('input').value = chat.draft || '';
   showHistory();
-  setStatus(engine.state === 'ready' ? '会話できます。' : '通常の会話は「会話を準備」から始められます。');
+  setStatus(engine.state === 'ready' ? '会話できます。' : '送信すると会話を始めます（初回はモデルを準備します）。');
 }
 async function switchChat(id) {
   if (pending || id === currentChat?.id) return;
@@ -322,7 +321,7 @@ $('delete-models').addEventListener('click', () => action(async () => {
 $('profile').addEventListener('change', () => action(async () => {
   await unload();
   storage.write(KEY + '-profile', $('profile').value);
-  setStatus('モデルを切り替えました。「会話を準備」を押してください。');
+  setStatus('モデルを切り替えました。次に送信したとき準備します。');
 }));
 $('stop').addEventListener('click', () => { engine.stop(); setStatus('停止しています…'); });
 for (const id of ['reply-tone', 'reply-length']) $(id).addEventListener('change', () => {
@@ -405,9 +404,14 @@ $('composer').addEventListener('submit', (event) => {
   });
 });
 
-// モデルで答える（会話を準備していなければ案内だけ）。correction：利用者の訂正（最優先の事実として残す）
+// モデルで答える（準備していなければ、ここで準備してから答える）。correction：利用者の訂正（最優先の事実として残す）
 async function modelReply(query, { extraSystem = '', correction = false, recommendFor = null } = {}) {
-  if (engine.state !== 'ready') { setStatus('覚えたフレーズや辞書にはありません。通常の会話は「会話を準備」を押してから送ってください。'); return; }
+  // 送信ボタンだけで使えるように、準備していなければここで準備する（初回はダウンロード。失敗したら入力は残す）
+  if (engine.state !== 'ready') {
+    setStatus('会話を準備しています…（初回はモデルをダウンロードします）');
+    await prepareConversation();
+    if (engine.state !== 'ready') return;
+  }
   const retrieved = await knowledge.retrieve(query);
   if (document.hidden) return;
   if (engine.state !== 'ready') await prepareConversation();
@@ -439,7 +443,7 @@ async function modelReply(query, { extraSystem = '', correction = false, recomme
     const seconds = ((performance.now() - start) / 1000).toFixed(1);
     reply.sub.textContent = `${result.interrupted ? '途中で停止 · ' : ''}${seconds}秒${messages.referenceText ? ' · 辞書・保存資料を参照' : ''}${retrieved.semanticError ? ' · 意味検索失敗、言葉の一致で検索' : ''}`;
     log('reply-complete', { seconds: Number(seconds), firstSeconds: first === null ? null : (first - start) / 1000, chars: result.text.length, interrupted: result.interrupted, pastPairs: Math.max(0, (messages.length - 2) / 2) });
-    setStatus(result.interrupted ? '停止してメモリを解放しました。「会話を準備」で再開できます。' : '会話できます。');
+    setStatus(result.interrupted ? '停止してメモリを解放しました。次に送信すると再開します。' : '会話できます。');
   } catch (error) { reply.body.textContent = '回答を作れませんでした。' + error.message; throw error; }
   finally { await saveHistory(); if (!engine.worker) releaseLock(); }
 }
@@ -478,7 +482,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('online', renderControls);
 window.addEventListener('offline', renderControls);
 window.addEventListener('pageshow', () => {
-  if (db && engine.state === 'idle') setStatus('「会話を準備」を押してください。保存済みモデルから再開します。');
+  if (db && engine.state === 'idle') setStatus('送信すると、保存済みモデルから再開します。');
 });
 
 async function prepareOffline() {
@@ -521,7 +525,7 @@ try {
   showHistory(); renderControls();
   const locks = await navigator.locks?.query?.().catch(() => null);
   const anotherTab = locks?.held?.some((lock) => lock.name === 'ai-safari-inference');
-  setStatus(anotherTab ? '別のタブでモデルが動いています。そちらでメモリを解放してから準備してください。' : previousStep ? '前回の処理が途中で終了しました。自動再実行はせず待機しています。スマホ用で「会話を準備」を試してください。' : '「会話を準備」を押すと、選んだモデルを用意します。');
+  setStatus(anotherTab ? '別のタブでモデルが動いています。そちらでメモリを解放してから準備してください。' : previousStep ? '前回の処理が途中で終了しました。自動では再実行しません。送信すると、もう一度準備します（落ちる場合は、メニューで軽いモデルを選んでください）。' : '話しかけてください。送信すると、選んだモデルを用意します。');
   if (!anotherTab) {
     if (previousStep) log('previous-interruption', previousStep);
     storage.write(STEP, null);

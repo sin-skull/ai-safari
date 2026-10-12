@@ -91,7 +91,7 @@ export function createKnowledgeUI({ getDB, action, unload, acquireLock, releaseL
         shouldStop: () => stopped,
         onProgress: ({ done, total }) => setStatus(`索引を作成中… ${done} / ${total}件`),
       }));
-      await refresh(); setStatus(`${count}件の索引を保存しました。${stopped ? '停止しました。' : ''}会話は「会話を準備」で再開できます。`);
+      await refresh(); setStatus(`${count}件の索引を保存しました。${stopped ? '停止しました。' : ''}会話は、次に送信すると再開します。`);
     } finally { $('semantic-stop').hidden = true; }
   }));
   $('semantic-stop').addEventListener('click', () => { stopped = true; setStatus('実行中の読み込み・文章の処理が終わったところで停止します。'); });
