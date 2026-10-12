@@ -4,6 +4,7 @@
 
 - 固定した複製元: [UPSTREAM.json](UPSTREAM.json)
 - 改修方針と保存先: [docs/SAFARI_PLAN.md](docs/SAFARI_PLAN.md)
+- 最新ロードマップ: [docs/ROADMAP.md](docs/ROADMAP.md)。自然言語会話の安定後に、コード生成・修正 → Webアプリ開発へ進みます。音声・操作も会話の基盤が完成してから取り組みます。
 - 公開URL: https://sin-skull.github.io/ai-safari/
 - 新しい会話画面: `index.html`。スマホ用 Qwen3 0.6B Q4 / CPU と PC用 Qwen3 0.6B Q4 / WebGPU を切り替えできます。
 - 記憶の整理と既存形式のバックアップ: `memory.html`。この画面では旧モデルを起動しません。
