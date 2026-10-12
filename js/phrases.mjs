@@ -13,7 +13,7 @@ export function findPhrase(query, phrases) {
 
 // Only an explicit teaching command is saved; ordinary quoted discussion is not.
 export function parsePhraseTeaching(text) {
-  const match = String(text).trim().match(/^(.+?)(?:と言われたら|と聞かれたら)\s*[「『]([^」』]+)[」』]\s*(?:って|と)(?:答えて|返して)(?:ください)?[。！!\s]*$/u);
+  const match = String(text).trim().match(/^(.+?)(?:と言われたら|と聞かれたら)[、,\s]*[「『]([^」』]+)[」』]\s*(?:って|と)(?:答えて|返して)(?:ください)?[。！!\s]*$/u);
   if (!match) return null;
   const q = match[1].trim().replace(/^[「『](.*)[」』]$/u, '$1').trim();
   const a = match[2].trim();

@@ -7,7 +7,7 @@ import { createKnowledgeUI } from './knowledge-ui.mjs';
 import { openChats, listChats, updateChat, selectChat, addChat, removeChat } from './chat-tabs.mjs';
 import { closeMenu } from './menu.mjs';
 
-const VERSION = '0.14.0';
+const VERSION = '0.14.1';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';
