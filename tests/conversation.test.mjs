@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { PROFILES, ConversationEngine, buildConversation, clipBytes, withReplyPreferences } from '../js/conversation-core.mjs';
+import { PHRASE_EXAMPLE, findPhrase } from '../js/phrases.mjs';
+
+test('taught phrases recognize punctuation and explicit continuation requests, not unrelated questions', () => {
+  const phrases = [PHRASE_EXAMPLE, { q: 'おかえり', a: 'ただいま' }];
+  assert.equal(findPhrase('もう恋なんてしないなんて？', phrases)?.a, PHRASE_EXAMPLE.a);
+  assert.equal(findPhrase('「もう恋なんてしないなんて」の続きは？', phrases)?.a, PHRASE_EXAMPLE.a);
+  assert.equal(findPhrase('おかえり！', phrases)?.a, 'ただいま');
+  assert.equal(findPhrase('おかえりの意味は？', phrases), undefined);
+  assert.equal(findPhrase('もう恋なんてしない', phrases), undefined);
+  assert.equal(findPhrase('', phrases), undefined);
+  assert.equal(findPhrase('おかえり', []), undefined);
+});
 
 test('Japanese text budget preserves current question and complete recent exchanges', () => {
   const history = Array.from({ length: 30 }, (_, i) => ({ q: '前の質問' + i, a: '答えです。'.repeat(12) }));

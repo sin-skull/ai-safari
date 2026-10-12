@@ -1,12 +1,15 @@
 import { PROFILES, ConversationEngine, buildConversation, withReplyPreferences } from './conversation-core.mjs';
 import { NamespacedOPFSBackend } from '../lab/storage.js';
 import { configureRuntime } from './runtime-compat.mjs';
+import { PHRASE_EXAMPLE, phraseKey, findPhrase } from './phrases.mjs';
 
-const VERSION = '0.12.8';
+const VERSION = '0.12.9';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';
 const DB_KEY = 'conversation-v1';
+const PHRASE_KEY = 'phrase-replies-v1';
+let phrases = [];
 const storage = {
   read(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch (_) { return fallback; } },
   write(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} },
@@ -67,8 +70,8 @@ function renderControls() {
   $('reply-tone').disabled = active;
   $('reply-length').disabled = active;
   $('release').disabled = active || !engine.worker;
-  $('send').disabled = !db || active || engine.state !== 'ready';
-  $('input').disabled = !db || active || engine.state !== 'ready';
+  $('send').disabled = !db || active;
+  $('input').disabled = !db || active;
   $('new-chat').disabled = !db || active;
   $('export-chat').disabled = !db || active;
   $('diagnostics').disabled = !db;
@@ -109,6 +112,43 @@ async function saveHistory() {
   history = history.slice(-40);
   await AI.db.tx(db, 'settings', 'readwrite', (t) => AI.db.rq(t.objectStore('settings').put({ name: DB_KEY, value: history })));
 }
+async function savePhrases(next) {
+  await AI.db.tx(db, 'settings', 'readwrite', t => AI.db.rq(t.objectStore('settings').put({ name: PHRASE_KEY, value: next })));
+  phrases = next;
+  renderPhrases();
+}
+function renderPhrases() {
+  $('phrase-summary').textContent = `フレーズを教える（${phrases.length}件）`;
+  $('phrase-list').replaceChildren();
+  for (const pair of phrases) {
+    const li = document.createElement('li');
+    const text = document.createElement('span'); text.textContent = `${pair.q} → ${pair.a}`;
+    const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = '編集';
+    edit.addEventListener('click', () => { $('phrase-question').value = pair.q; $('phrase-answer').value = pair.a; $('phrase-question').focus(); });
+    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '削除';
+    remove.addEventListener('click', async () => {
+      remove.disabled = true;
+      try { await savePhrases(phrases.filter(p => phraseKey(p.q) !== phraseKey(pair.q))); $('phrase-status').textContent = '削除しました。'; }
+      catch (_) { remove.disabled = false; $('phrase-status').textContent = '削除できませんでした。'; }
+    });
+    li.append(text, edit, remove); $('phrase-list').append(li);
+  }
+}
+$('phrase-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!db || $('phrase-save').disabled) return;
+  const q = $('phrase-question').value.trim(), a = $('phrase-answer').value.trim();
+  if (!phraseKey(q) || !a) { $('phrase-status').textContent = 'フレーズと返答を入力してください。'; return; }
+  $('phrase-save').disabled = true;
+  try {
+    const next = phrases.filter(p => phraseKey(p.q) !== phraseKey(q));
+    if (next.length >= 100) throw new Error('100件まで保存できます。不要なフレーズを削除してください。');
+    await savePhrases([...next, { q, a }]);
+    $('phrase-status').textContent = '覚えました。会話欄にフレーズを入力すると返答します。';
+    $('phrase-form').reset();
+  } catch (error) { $('phrase-status').textContent = error.message || '保存できませんでした。'; }
+  finally { $('phrase-save').disabled = false; }
+});
 function append(role, text, note = '') {
   $('welcome').hidden = true;
   const box = document.createElement('article');
@@ -136,7 +176,7 @@ function showHistory() {
   $('welcome').hidden = !!history.length;
   for (const h of history) {
     append('user', h.q);
-    if (h.a) append('assistant', h.a, h.interrupted ? '途中で停止' : '');
+    if (h.a) append('assistant', h.a, h.interrupted ? '途中で停止' : h.source === 'phrase' ? '教えてもらったフレーズから返答' : '');
   }
 }
 function download(name, data) {
@@ -187,9 +227,21 @@ for (const id of ['reply-tone', 'reply-length']) $(id).addEventListener('change'
 });
 $('composer').addEventListener('submit', (event) => {
   event.preventDefault();
-  if (engine.state !== 'ready' || !$('input').value.trim()) return;
+  if (!db || !$('input').value.trim()) return;
   action(async () => {
     const query = $('input').value.trim();
+    const known = findPhrase(query, phrases);
+    if (known) {
+      const pair = { q: query, a: known.a, source: 'phrase', interrupted: false, at: Date.now() };
+      history.push(pair);
+      try { await saveHistory(); } catch (error) { history.pop(); throw error; }
+      $('input').value = '';
+      append('user', query); append('assistant', known.a, '教えてもらったフレーズから返答');
+      setStatus('保存したフレーズから返答しました。');
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      return;
+    }
+    if (engine.state !== 'ready') { setStatus('覚えたフレーズにはありません。通常の会話は「会話を準備」を押してから送ってください。'); return; }
     const hits = await AI.passages.search(db, query, { limit: 2 }); // lexical lookup, no embedding model
     const memories = hits.map((h) => h.passage.body);
     const preferences = replyPreferences();
@@ -268,6 +320,10 @@ async function prepareOffline() {
 }
 try {
   db = await AI.db.open();
+  const savedPhrases = await AI.db.tx(db, 'settings', 'readonly', t => AI.db.rq(t.objectStore('settings').get(PHRASE_KEY)));
+  if (!savedPhrases) await savePhrases([{ ...PHRASE_EXAMPLE }]);
+  else { phrases = (Array.isArray(savedPhrases.value) ? savedPhrases.value : []).filter(p => typeof p?.q === 'string' && typeof p?.a === 'string').slice(0, 100); renderPhrases(); }
+  $('phrase-save').disabled = false;
   const row = await AI.db.tx(db, 'settings', 'readonly', (t) => AI.db.rq(t.objectStore('settings').get(DB_KEY)));
   history = (Array.isArray(row?.value) ? row.value : []).filter((h) => typeof h?.q === 'string' && typeof h?.a === 'string').slice(-40);
   const profile = storage.read(KEY + '-profile', 'mobile');

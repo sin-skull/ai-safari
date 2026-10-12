@@ -29,18 +29,29 @@
       <progress id="progress" max="100" hidden aria-label="モデルの取得状況"></progress>
       <p id="offline" class="muted">オフライン起動の準備を確認中…</p>
     </section>
+    <details class="phrase-memory">
+      <summary id="phrase-summary">フレーズを教える</summary>
+      <p class="muted">教えたフレーズに、保存した返答を返します。オフライン・モデル準備なしで使えます。ネット検索はしません。</p>
+      <form id="phrase-form">
+        <label for="phrase-question">呼びかけ・フレーズ</label><input id="phrase-question" maxlength="200" required placeholder="例：おかえり">
+        <label for="phrase-answer">返してほしい言葉</label><textarea id="phrase-answer" maxlength="500" rows="2" required placeholder="例：ただいま。今日もお疲れさま！"></textarea>
+        <button id="phrase-save" type="submit" disabled>覚える</button><span id="phrase-status" role="status" class="muted"></span>
+      </form>
+      <p class="muted">同じフレーズは新しい返答で上書きします。保存先はこの端末です。</p>
+      <ul id="phrase-list"></ul>
+    </details>
     <section id="thread" aria-label="会話">
       <div id="welcome"><span class="orb" aria-hidden="true">✦</span><h2>ここで、話しましょう。</h2><p>ちょっとした相談も、考えごとの続きも。<br>会話はこの端末の中で処理します。</p><p class="muted">初回はモデルを取得します。保存後は機内モードで試せます。<br>iPhoneでの速度と安定性は、実機で確認する段階です。</p></div>
       <div id="messages" role="log" aria-label="会話履歴" aria-live="polite" aria-relevant="additions"></div>
     </section>
     <form id="composer"><label class="sr-only" for="input">メッセージ</label><textarea id="input" rows="2" maxlength="4000" placeholder="話したいことを入力…" disabled></textarea><div class="composer-foot"><span>Shift + Enter で改行</span><button id="stop" type="button" hidden>止める</button><button id="send" class="primary" disabled>送信 ↑</button></div></form>
     <div class="footer-actions"><button id="new-chat" disabled>会話をリセット</button><button id="export-chat" disabled>会話を書き出す</button><button id="diagnostics" disabled>動作記録を書き出す</button><button id="delete-models" disabled>保存モデルを削除</button></div>
-    <footer><span>ai Safari 0.12.8 · 音声会話は今後対応</span><a href="lab/index.html" id="lab-link">試験室</a></footer>
+    <footer><span>ai Safari 0.12.9 · 音声会話は今後対応</span><a href="lab/index.html" id="lab-link">試験室</a></footer>
     <noscript>会話を使うにはJavaScriptを有効にしてください。</noscript>
   </main>
-  <script src="js/normalize.js?v=0.12.8"></script>
-  <script src="js/db.js?v=0.12.8"></script>
-  <script src="js/passages.js?v=0.12.8"></script>
+  <script src="js/normalize.js?v=0.12.9"></script>
+  <script src="js/db.js?v=0.12.9"></script>
+  <script src="js/passages.js?v=0.12.9"></script>
   <script type="module" src="js/conversation.mjs"></script>
   <script type="module" src="js/app-update.mjs"></script>
 </body>
