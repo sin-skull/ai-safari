@@ -1,9 +1,9 @@
 {
   "name": "ai-safari",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "private": true,
   "scripts": {
-    "test": "node tests/run-node.cjs && node --test tests/conversation.test.mjs tests/knowledge.test.mjs"
+    "test": "node tests/run-node.cjs && node --test tests/conversation.test.mjs tests/knowledge.test.mjs tests/chat-tabs.test.mjs"
   },
   "devDependencies": {
     "fake-indexeddb": "^6.2.5"

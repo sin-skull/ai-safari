@@ -36,6 +36,7 @@ const pw = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       });
     }
     console.log('ONLINE', await embed());
+    await page.locator('#open-menu').click();
     await page.locator('#network-mode').selectOption('offline');
     await page.waitForFunction(() => AI.net.isOffline());
     await context.setOffline(true);

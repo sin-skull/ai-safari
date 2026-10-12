@@ -37,6 +37,9 @@ button.addEventListener('click', async () => {
   button.disabled = true;
   status.textContent = '最新版を確認しています… 更新後に再起動し、実行中の処理は中断します。';
   try {
+    const saves = [];
+    document.dispatchEvent(new CustomEvent('ai-before-update', { detail: { waitUntil: promise => saves.push(promise) } }));
+    await bounded(Promise.all(saves));
     if (!navigator.serviceWorker) throw new Error('このブラウザではアプリの更新を確認できません。');
     const registration = await bounded(navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }));
     // Unlike an ordinary reload, update() checks the worker on the network.

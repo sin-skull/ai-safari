@@ -74,7 +74,7 @@ const engine = process.env.BROWSER_ENGINE || 'webkit';
     await page.reload();
     await page.waitForFunction(() => !document.querySelector('#prepare').disabled);
     if (engine === 'chromium') assert.equal(await page.evaluate(() => navigator.onLine), false);
-    assert.match(await page.locator('footer').innerText(), /ai Safari/);
+    assert.match(await page.locator('footer').textContent(), /ai Safari/);
     // Windows WebKit additionally reports the intentionally failed probe as
     // pageerror events, although fetch's rejection above was handled.
     const unexpected = errors.filter(message => message !== 'TypeError: Load failed' && !message.includes('/uncached-network-probe-'));

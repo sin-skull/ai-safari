@@ -12,11 +12,38 @@
   <title>ai Safari · オフライン会話</title>
 </head>
 <body>
+  <aside class="sidebar" aria-label="保存した会話">
+    <div class="brand">ai <span>Safari</span></div>
+    <button id="new-chat" class="new-conversation" disabled>＋ 新しい会話</button>
+    <p class="sidebar-label">会話</p><nav id="chat-list" aria-label="会話一覧"></nav>
+    <button class="sidebar-menu" data-open-menu>☰ メニュー・設定</button>
+    <p class="sidebar-note">あなたの端末で動くAI</p>
+  </aside>
   <main>
-    <header><div><span class="eyebrow">ON YOUR DEVICE</span><h1>ai <span>Safari</span></h1></div><a href="memory.html" id="memory-link">記憶・バックアップ ↗</a></header>
+    <header class="chat-header">
+      <button id="open-menu" class="icon-button" data-open-menu aria-label="メニューを開く" aria-haspopup="dialog">☰</button>
+      <div class="header-title"><h1 id="chat-title">新しい会話</h1><span class="muted" id="chat-mode">端末内AI</span></div>
+      <button id="new-chat-top" class="icon-button" aria-label="新しい会話" disabled>＋</button>
+    </header>
+    <div id="chat-tabs" role="tablist" aria-label="会話を切り替え"></div>
+    <section id="thread" role="tabpanel" aria-label="会話">
+      <div id="welcome"><span class="orb" aria-hidden="true">✦</span><h2>何から話しましょう？</h2><p>会話は、この端末に保存されます。</p><button id="prepare-shortcut" disabled>会話を準備</button><p class="muted">回答は端末内の小型AIが生成します。<br>自然な会話の品質は、まだ改善中です。</p></div>
+      <div id="messages" role="log" aria-label="会話履歴" aria-live="polite" aria-relevant="additions"></div>
+    </section>
+    <div class="composer-dock">
+      <p id="status" role="status">アプリを準備しています…</p>
+      <progress id="progress" max="100" hidden aria-label="モデルの取得状況"></progress>
+      <form id="composer"><label class="sr-only" for="input">メッセージ</label><textarea id="input" rows="2" maxlength="4000" placeholder="メッセージを入力…" disabled></textarea><div class="composer-foot"><button type="button" id="composer-settings" data-open-menu aria-label="会話の設定を開く">設定</button><span>端末内で回答</span><button id="stop" type="button" hidden>止める</button><button id="send" class="primary" disabled>送信 ↑</button></div></form>
+    </div>
+  </main>
+  <dialog id="app-menu" aria-labelledby="menu-title">
+    <div class="menu-heading"><h2 id="menu-title">メニュー</h2><button id="close-menu" class="icon-button" aria-label="メニューを閉じる">×</button></div>
+    <div class="menu-content">
+      <p id="menu-status" class="muted"></p>
+      <section class="chat-management" aria-label="今の会話の管理"><h3>今の会話</h3><label for="chat-name">会話の名前</label><div class="name-row"><input id="chat-name" maxlength="60"><button id="rename-chat" disabled>変更</button></div><div class="buttons"><button id="export-chat" disabled>この会話を書き出す</button><button id="export-all" disabled>全ての会話を書き出す</button><button id="delete-chat" class="danger" disabled>この会話を削除</button></div></section>
     <div class="app-update"><button id="update-app" type="button">↻ アプリを更新</button><span id="update-status" role="status">オンラインで最新版を確認します。</span></div>
     <section class="setup" aria-label="会話の設定">
-      <div class="network-mode"><label for="network-mode">通信モード</label><select id="network-mode" disabled><option value="offline">オフライン · 保存済みだけ使う</option><option value="online">オンライン · 情報の取得を許可</option></select><p class="muted">会話の生成はどちらも端末内です。オンラインでも検索はボタンを押したときだけ行います。</p></div>
+      <div class="network-mode"><label for="network-mode">情報の取得</label><select id="network-mode" disabled><option value="offline">取得しない（オフライン）</option><option value="online">取得を許可（オンライン）</option></select><p class="muted">どちらを選んでも回答は同じ端末内AIが作ります。オンラインにしてもモデルの能力は変わりません。Wikipedia検索はボタンを押したときだけ行います。</p></div>
       <div class="setup-top"><label for="profile">使うモデル</label><span class="badge" id="connection">端末内で会話</span></div>
       <select id="profile"><option value="mobile">スマホ用 · Qwen3 0.6B / 約400MB</option><option value="pc">PC用 · Qwen3 0.6B / GPU</option><option value="tiny">最小・動作確認用 · LFM2 350M / 約230MB</option></select>
       <p id="model-note" class="muted"></p>
@@ -26,8 +53,6 @@
       </div>
       <p id="reply-note" class="muted" role="status">次の回答から反映します。モデルの再取得は不要です。</p>
       <div class="buttons"><button id="prepare" class="primary" disabled>会話を準備</button><button id="release" disabled>メモリを解放</button></div>
-      <p id="status" role="status">アプリを準備しています…</p>
-      <progress id="progress" max="100" hidden aria-label="モデルの取得状況"></progress>
       <p id="offline" class="muted">オフライン起動の準備を確認中…</p>
     </section>
     <details class="phrase-memory" id="dictionary-panel">
@@ -53,26 +78,23 @@
       <p class="muted">同じフレーズは新しい返答で上書きします。保存先はこの端末です。</p>
       <ul id="phrase-list"></ul>
     </details>
-    <section id="thread" aria-label="会話">
-      <div id="welcome"><span class="orb" aria-hidden="true">✦</span><h2>ここで、話しましょう。</h2><p>ちょっとした相談も、考えごとの続きも。<br>会話はこの端末の中で処理します。</p><p class="muted">初回はモデルを取得します。保存後は機内モードで試せます。<br>iPhoneでの速度と安定性は、実機で確認する段階です。</p></div>
-      <div id="messages" role="log" aria-label="会話履歴" aria-live="polite" aria-relevant="additions"></div>
-    </section>
-    <form id="composer"><label class="sr-only" for="input">メッセージ</label><textarea id="input" rows="2" maxlength="4000" placeholder="話したいことを入力…" disabled></textarea><div class="composer-foot"><span>Shift + Enter で改行</span><button id="stop" type="button" hidden>止める</button><button id="send" class="primary" disabled>送信 ↑</button></div></form>
-    <div class="footer-actions"><button id="new-chat" disabled>会話をリセット</button><button id="export-chat" disabled>会話を書き出す</button><button id="diagnostics" disabled>動作記録を書き出す</button><button id="delete-models" disabled>保存モデルを削除</button></div>
-    <footer><span>ai Safari 0.13.0 · 音声会話は今後対応</span><a href="lab/index.html" id="lab-link">試験室</a></footer>
-    <noscript>会話を使うにはJavaScriptを有効にしてください。</noscript>
-  </main>
-  <script src="js/normalize.js?v=0.13.0"></script>
-  <script src="js/db.js?v=0.13.0"></script>
-  <script src="js/passages.js?v=0.13.0"></script>
-  <script src="js/terms.js?v=0.13.0"></script>
-  <script src="js/net.js?v=0.13.0"></script>
-  <script src="js/wiki.js?v=0.13.0"></script>
-  <script src="js/store.js?v=0.13.0"></script>
-  <script src="js/embed.js?v=0.13.0"></script>
-  <script src="js/vectors.js?v=0.13.0"></script>
-  <script src="js/hybrid.js?v=0.13.0"></script>
-  <script src="js/rag.js?v=0.13.0"></script>
+      <div class="menu-links"><a href="memory.html" id="memory-link">記憶・バックアップ ↗</a><a href="lab/index.html" id="lab-link">試験室 ↗</a></div>
+      <div class="footer-actions"><button id="diagnostics" disabled>動作記録を書き出す</button><button id="delete-models" disabled>保存モデルを削除</button></div>
+      <footer><span>ai Safari 0.14.0 · 音声会話は今後対応</span></footer>
+    </div>
+  </dialog>
+  <noscript>会話を使うにはJavaScriptを有効にしてください。</noscript>
+  <script src="js/normalize.js?v=0.14.0"></script>
+  <script src="js/db.js?v=0.14.0"></script>
+  <script src="js/passages.js?v=0.14.0"></script>
+  <script src="js/terms.js?v=0.14.0"></script>
+  <script src="js/net.js?v=0.14.0"></script>
+  <script src="js/wiki.js?v=0.14.0"></script>
+  <script src="js/store.js?v=0.14.0"></script>
+  <script src="js/embed.js?v=0.14.0"></script>
+  <script src="js/vectors.js?v=0.14.0"></script>
+  <script src="js/hybrid.js?v=0.14.0"></script>
+  <script src="js/rag.js?v=0.14.0"></script>
   <script type="module" src="js/conversation.mjs"></script>
   <script type="module" src="js/app-update.mjs"></script>
 </body>

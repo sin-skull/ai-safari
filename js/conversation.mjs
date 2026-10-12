@@ -4,12 +4,13 @@ import { configureRuntime } from './runtime-compat.mjs';
 import { PHRASE_EXAMPLE, phraseKey, findPhrase, parsePhraseTeaching } from './phrases.mjs';
 import { dictionaryMatches, definitionQuery } from './knowledge.mjs';
 import { createKnowledgeUI } from './knowledge-ui.mjs';
+import { openChats, listChats, updateChat, selectChat, addChat, removeChat } from './chat-tabs.mjs';
+import { closeMenu } from './menu.mjs';
 
-const VERSION = '0.13.0';
+const VERSION = '0.14.0';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';
-const DB_KEY = 'conversation-v1';
 const PHRASE_KEY = 'phrase-replies-v1';
 let phrases = [];
 const storage = {
@@ -17,6 +18,7 @@ const storage = {
   write(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} },
 };
 let db, history = [], pending = false, lockRelease = null, cacheManager, lib, knowledge;
+let currentChat, chats = [], draftTimer, tabsSignature = '';
 let events = storage.read(KEY + '-events', []);
 if (!Array.isArray(events)) events = [];
 const previousStep = storage.read(STEP, null);
@@ -24,7 +26,7 @@ const log = (event, extra = {}) => {
   events = [...events, { at: new Date().toISOString(), event, ...extra }].slice(-30);
   storage.write(KEY + '-events', events); // No prompts or answers in diagnostics.
 };
-const setStatus = (text) => { $('status').textContent = text; };
+const setStatus = (text) => { $('status').textContent = text; $('menu-status').textContent = text; };
 const selected = () => PROFILES[$('profile').value];
 const replyPreferences = () => ({ tone: $('reply-tone').value, length: $('reply-length').value });
 const asset = (path) => new URL(path, import.meta.url).href;
@@ -75,6 +77,11 @@ function renderControls() {
   $('send').disabled = !db || active;
   $('input').disabled = !db || active;
   $('new-chat').disabled = !db || active;
+  $('new-chat-top').disabled = !currentChat || active;
+  $('prepare-shortcut').disabled = $('prepare').disabled;
+  $('prepare-shortcut').textContent = engine.state === 'ready' ? '準備できました' : '会話を準備';
+  for (const id of ['rename-chat', 'delete-chat', 'export-all']) $(id).disabled = !currentChat || active;
+  renderTabs(active);
   $('export-chat').disabled = !db || active;
   $('diagnostics').disabled = !db;
   $('delete-models').disabled = !db || active;
@@ -82,7 +89,9 @@ function renderControls() {
   $('network-mode').disabled = !db || active;
   $('network-mode').value = AI.net.isOffline() ? 'offline' : 'online';
   knowledge?.render(active);
-  $('connection').textContent = AI.net.isOffline() || navigator.onLine === false ? 'オフライン · 端末内で会話' : 'オンライン · 端末内で会話';
+  const mode = AI.net.isOffline() || navigator.onLine === false ? '外部取得なし' : '外部取得を許可';
+  $('connection').textContent = mode;
+  $('chat-mode').textContent = '端末内AI · ' + mode;
   const p = selected();
   $('model-note').textContent = $('profile').value !== 'pc'
     ? `CPUで省メモリ動作。初回約${p.mb}MBを取得します。${p.license}。`
@@ -116,8 +125,63 @@ async function unload() {
 }
 async function saveHistory() {
   history = history.slice(-40);
-  await AI.db.tx(db, 'settings', 'readwrite', (t) => AI.db.rq(t.objectStore('settings').put({ name: DB_KEY, value: history })));
+  clearTimeout(draftTimer);
+  currentChat = await updateChat(db, currentChat.id, { history, draft: $('input').value });
+  await refreshChats();
 }
+async function refreshChats() { chats = await listChats(db); renderTabs(pending); }
+function renderTabs(active) {
+  if (!currentChat) return;
+  $('chat-title').textContent = currentChat.title;
+  const signature = JSON.stringify([currentChat.id, chats.map(c => [c.id, c.title])]);
+  if (signature !== tabsSignature) {
+    tabsSignature = signature;
+    $('chat-tabs').replaceChildren(); $('chat-list').replaceChildren();
+    for (const chat of chats) {
+      for (const [container, tab] of [['chat-tabs', true], ['chat-list', false]]) {
+        const button = document.createElement('button'); button.textContent = chat.title; button.title = chat.title;
+        button.dataset.chatId = chat.id;
+        if (tab) {
+          button.id = 'tab-' + chat.id; button.setAttribute('role', 'tab'); button.setAttribute('aria-controls', 'thread');
+          button.setAttribute('aria-selected', String(chat.id === currentChat.id)); button.tabIndex = chat.id === currentChat.id ? 0 : -1;
+        } else if (chat.id === currentChat.id) button.setAttribute('aria-current', 'page');
+        button.addEventListener('click', () => switchChat(chat.id));
+        $(container).append(button);
+      }
+    }
+    $('thread').setAttribute('aria-labelledby', 'tab-' + currentChat.id);
+    $('chat-name').value = currentChat.title;
+  }
+  document.querySelectorAll('[data-chat-id]').forEach(button => { button.disabled = active; });
+}
+async function flushDraft() {
+  clearTimeout(draftTimer);
+  if (currentChat) await updateChat(db, currentChat.id, { draft: $('input').value });
+}
+function activateChat(chat) {
+  currentChat = chat; history = chat.history; $('input').value = chat.draft || '';
+  showHistory();
+  setStatus(engine.state === 'ready' ? '会話できます。' : '通常の会話は「会話を準備」から始められます。');
+}
+async function switchChat(id) {
+  if (pending || id === currentChat?.id) return;
+  await action(async () => { await flushDraft(); activateChat(await selectChat(db, id)); await refreshChats(); });
+  $('tab-' + currentChat.id)?.focus();
+}
+$('chat-tabs').addEventListener('keydown', event => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || pending) return;
+  event.preventDefault();
+  const index = chats.findIndex(c => c.id === currentChat.id);
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? chats.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + chats.length) % chats.length;
+  switchChat(chats[next].id);
+});
+$('input').addEventListener('input', () => {
+  clearTimeout(draftTimer);
+  if (!currentChat) return;
+  const id = currentChat.id, draft = $('input').value;
+  draftTimer = setTimeout(() => updateChat(db, id, { draft }).catch(error => setStatus('入力文を保存できませんでした。' + error.message)), 250);
+});
+document.addEventListener('ai-before-update', event => { event.detail.waitUntil(flushDraft()); });
 async function savePhrases(next) {
   await AI.db.tx(db, 'settings', 'readwrite', t => AI.db.rq(t.objectStore('settings').put({ name: PHRASE_KEY, value: next })));
   phrases = next;
@@ -202,8 +266,8 @@ function showReference(reply, text) {
 async function localReply(query, answer, source, label, referenceText = '') {
   const pair = { q: query, a: answer, source, referenceText, interrupted: false, at: Date.now() };
   history.push(pair);
-  try { await saveHistory(); } catch (error) { history.pop(); throw error; }
   $('input').value = '';
+  try { await saveHistory(); } catch (error) { history.pop(); $('input').value = query; throw error; }
   append('user', query); const reply = append('assistant', answer, label);
   if (referenceText) showReference(reply, referenceText);
   setStatus(label + 'しました。');
@@ -241,6 +305,7 @@ async function prepareConversation() {
   } catch (error) { if (!engine.worker) releaseLock(); throw error; }
 }
 $('prepare').addEventListener('click', () => action(prepareConversation));
+$('prepare-shortcut').addEventListener('click', () => action(prepareConversation));
 $('release').addEventListener('click', () => action(unload));
 $('delete-models').addEventListener('click', () => action(async () => {
   if (!window.confirm('この会話画面で取得したモデルを削除しますか？ 会話と記憶は残ります。次回は再ダウンロードが必要です。')) return;
@@ -324,19 +389,30 @@ $('input').addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); }
 });
 $('new-chat').addEventListener('click', () => action(async () => {
-  if (!window.confirm('この端末の現在の会話履歴を消しますか？ 必要なら先に書き出してください。記憶に保存した内容は残ります。')) return;
-  history = []; await saveHistory(); showHistory();
+  await flushDraft(); activateChat(await addChat(db)); await refreshChats(); closeMenu(); $('input').focus();
 }));
-$('export-chat').addEventListener('click', () => download('ai-safari-conversation.json', { format: 'ai-safari-conversation', version: 1, history }));
+$('new-chat-top').addEventListener('click', () => $('new-chat').click());
+$('rename-chat').addEventListener('click', () => {
+  const title = $('chat-name').value.trim();
+  if (!title) return;
+  action(async () => { currentChat = await updateChat(db, currentChat.id, { title: title.slice(0, 60), customTitle: true }); await refreshChats(); });
+});
+$('delete-chat').addEventListener('click', () => action(async () => {
+  if (!window.confirm(`「${currentChat.title}」を削除しますか？ 他の会話・辞書・フレーズは残ります。`)) return;
+  clearTimeout(draftTimer); activateChat(await removeChat(db, currentChat.id)); await refreshChats(); closeMenu();
+}));
+$('export-chat').addEventListener('click', () => download('ai-safari-conversation.json', { format: 'ai-safari-conversation', version: 1, title: currentChat.title, history }));
+$('export-all').addEventListener('click', () => action(async () => { await flushDraft(); download('ai-safari-chats.json', { format: 'ai-safari-chats', version: 2, chats: await listChats(db) }); }));
 $('diagnostics').addEventListener('click', () => download('ai-safari-diagnostics.json', { version: VERSION, userAgent: navigator.userAgent, profile: $('profile').value, events }));
 for (const id of ['memory-link', 'lab-link']) $(id).addEventListener('click', (event) => {
   event.preventDefault();
   const href = $(id).href;
   if (pending) { setStatus('処理を止めてから移動してください。'); return; }
-  action(async () => { await unload(); location.href = href; });
+  action(async () => { await flushDraft(); await unload(); location.href = href; });
 });
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) return;
+  flushDraft().catch(() => {});
   engine.stop();
   // Serial release happens after an in-flight generation; never during WASM use.
   if (engine.state === 'ready' || engine.state === 'generating') engine.unload().then(releaseLock).catch(() => {});
@@ -374,8 +450,10 @@ try {
   if (!savedPhrases) await savePhrases([{ ...PHRASE_EXAMPLE }]);
   else { phrases = (Array.isArray(savedPhrases.value) ? savedPhrases.value : []).filter(p => typeof p?.q === 'string' && typeof p?.a === 'string').slice(0, 100); renderPhrases(); }
   $('phrase-save').disabled = false;
-  const row = await AI.db.tx(db, 'settings', 'readonly', (t) => AI.db.rq(t.objectStore('settings').get(DB_KEY)));
-  history = (Array.isArray(row?.value) ? row.value : []).filter((h) => typeof h?.q === 'string' && typeof h?.a === 'string').slice(-40);
+  const savedChats = await openChats(db);
+  chats = savedChats.chats; currentChat = savedChats.current; history = currentChat.history;
+  // The update module may already have restored an unsent draft from the old UI.
+  if (!$('input').value) $('input').value = currentChat.draft || '';
   const profile = storage.read(KEY + '-profile', 'mobile');
   $('profile').value = PROFILES[profile] ? profile : 'mobile';
   const reply = storage.read(KEY + '-reply', {}) || {};

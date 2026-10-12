@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
+import { indexedDB } from 'fake-indexeddb';
+import { openChats, listChats, addChat, updateChat, selectChat, removeChat } from '../js/chat-tabs.mjs';
+globalThis.indexedDB = indexedDB;
+vm.runInThisContext(readFileSync('js/db.js', 'utf8'));
+
+test('migration preserves legacy history; chats and drafts stay separate after reload/deletion', async () => {
+  const db = await AI.db.open();
+  const history = [{q:'前の会話',a:'保存しておく回答',interrupted:false}];
+  await AI.db.tx(db,'settings','readwrite',t=>AI.db.rq(t.objectStore('settings').put({name:'conversation-v1',value:history})));
+  const {current:first} = await openChats(db);
+  assert.deepEqual(first.history,history);
+  await updateChat(db,first.id,{draft:'書きかけA'});
+  const second = await addChat(db);
+  await updateChat(db,second.id,{history:[{q:'別の質問',a:'別の答え'}],draft:'書きかけB'});
+  assert.equal((await openChats(db)).current.id,second.id);
+  assert.equal((await selectChat(db,first.id)).draft,'書きかけA');
+  assert.deepEqual((await selectChat(db,first.id)).history,history);
+  await updateChat(db,first.id,{customTitle:true,title:'相談'});
+  await updateChat(db,first.id,{history:[{q:'名前が変わる？',a:'変わらない'}]});
+  assert.equal((await selectChat(db,first.id)).title,'相談');
+  await removeChat(db,second.id);
+  assert.equal((await listChats(db)).length,1);
+  const empty=await removeChat(db,first.id);
+  assert.equal(empty.history.length,0);
+  assert.equal((await openChats(db)).current.history.length,0,'Deleted legacy conversation never resurrects');
+  await assert.rejects(updateChat(db,first.id,{draft:'late write'}),/削除/);
+  db.close();
+});
