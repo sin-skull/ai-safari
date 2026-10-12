@@ -8,7 +8,7 @@ import { openChats, listChats, updateChat, selectChat, addChat, removeChat } fro
 import { closeMenu } from './menu.mjs';
 import { deviceAnswer, isCorrection, applyCorrection, splitRequests, recommendQuestion, recommendInstruction } from './dialog.mjs';
 
-const VERSION = '0.15.1';
+const VERSION = '0.15.2';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';
@@ -308,6 +308,18 @@ async function prepareConversation() {
     setStatus('会話できます。モデルは端末に保存済みです。');
   } catch (error) { if (!engine.worker) releaseLock(); throw error; }
 }
+// 送信時の準備：一時的な失敗なら1回だけやり直す（保存されていない・オフライン・別のタブが使用中・WebGPU が無い、はやり直さない）
+async function prepareWithRetry() {
+  try {
+    await prepareConversation();
+  } catch (error) {
+    if (/保存されていません|オフライン|別の|WebGPU|解放できません/u.test(String(error.message)) || document.hidden) throw error;
+    log('prepare-retry', { message: String(error.message).slice(0, 120) });
+    setStatus('準備に失敗したので、もう一度試しています…');
+    await new Promise((r) => setTimeout(r, 500));
+    await prepareConversation();
+  }
+}
 $('prepare').addEventListener('click', () => action(prepareConversation));
 $('prepare-shortcut').addEventListener('click', () => action(prepareConversation));
 $('release').addEventListener('click', () => action(unload));
@@ -407,9 +419,9 @@ $('composer').addEventListener('submit', (event) => {
 // モデルで答える（準備していなければ、ここで準備してから答える）。correction：利用者の訂正（最優先の事実として残す）
 async function modelReply(query, { extraSystem = '', correction = false, recommendFor = null } = {}) {
   // 送信ボタンだけで使えるように、準備していなければここで準備する（初回はダウンロード。失敗したら入力は残す）
-  if (engine.state !== 'ready') {
+  if (engine.state !== 'ready' || !engine.worker) {
     setStatus('会話を準備しています…（初回はモデルをダウンロードします）');
-    await prepareConversation();
+    await prepareWithRetry();
     if (engine.state !== 'ready') return;
   }
   const retrieved = await knowledge.retrieve(query);
@@ -431,12 +443,26 @@ async function modelReply(query, { extraSystem = '', correction = false, recomme
   catch (error) { history.pop(); $('input').value = query; reply.body.textContent = '会話を保存できませんでした。'; throw error; }
   const start = performance.now(); let first = null;
   try {
-    const result = await engine.generate(messages, (text) => {
+    const onText = (text) => {
       if (text && first === null) first = performance.now();
       const atEnd = document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 260;
       reply.body.textContent = text || '考えています…';
       if (atEnd) window.scrollTo(0, document.documentElement.scrollHeight);
-    }, preferences);
+    };
+    let result;
+    try {
+      result = await engine.generate(messages, onText, preferences);
+    } catch (error) {
+      // 準備が切れていた（Safari が裏で計算用の worker を止めた等）ときは、1回だけ準備し直して答え直す。
+      // 文字が1つも出ていないときだけ（途中まで出た答えを二重にしない）。
+      if (first !== null || document.hidden) throw error;
+      log('reconnect', { message: String(error.message).slice(0, 120) });
+      setStatus('準備が切れていたので、つなぎ直しています…');
+      reply.body.textContent = 'つなぎ直しています…';
+      await prepareConversation();
+      if (engine.state !== 'ready') throw error;
+      result = await engine.generate(messages, onText, preferences);
+    }
     pair.a = result.text;
     pair.interrupted = result.interrupted;
     reply.body.textContent = result.text || (result.interrupted ? '停止しました。' : '答えが空でした。言い方を変えて試してください。');

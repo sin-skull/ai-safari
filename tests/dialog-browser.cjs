@@ -11,8 +11,9 @@ export const LoggerWithoutDebug = {};
 export class CacheManager {}
 export class Wllama {
  constructor(){this.modelManager={getModels:async()=>[{url:PROFILES.mobile.url,open:async()=>[]}]} }
- setCompat(){} async loadModel(){} async exit(){}
+ setCompat(){} async loadModel(){ window.testLoads=(window.testLoads||0)+1; } async exit(){ window.testExits=(window.testExits||0)+1; }
  async *createChatCompletion(options){
+  if (window.failOnce) { window.failOnce=false; throw new Error('worker was terminated'); }
   window.testMessages=options.messages; window.testCalls=(window.testCalls||0)+1;
   yield {choices:[{delta:{content:window.nextAnswer||'テストの答えです。'}}]};
  }
@@ -88,12 +89,29 @@ export class Wllama {
     const msgs3 = await page.evaluate(() => window.testMessages);
     assert.equal(msgs3.length, 2, 'system と今の質問だけ');
 
+    // 準備が切れたあと（画面を離れてメモリを解放した）でも、送信だけでつながる
+    const loads0 = await page.evaluate(() => window.testLoads || 0);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.waitForFunction(() => document.querySelector('#status').textContent.includes('待機中'));
+    await page.evaluate(() => { delete document.hidden; Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); window.nextAnswer = '戻ってきました。'; });
+    assert.match(await send('ただいま、続きを話そう'), /戻ってきました/);
+    assert.ok((await page.evaluate(() => window.testLoads)) > loads0, '送信で準備し直した');
+
+    // 準備できているはずなのに計算が失敗した（worker が止められていた）ときも、1回だけつなぎ直して答える
+    await page.evaluate(() => { window.failOnce = true; window.nextAnswer = 'つなぎ直して答えました。'; });
+    assert.match(await send('もう一度教えて'), /つなぎ直して答えました/);
+    const ev = await page.evaluate(() => JSON.parse(localStorage.getItem('ai-safari-conversation-events') || '[]').map((e) => e.event));
+    assert.ok(ev.includes('reconnect'), 'つなぎ直しを記録');
+
     // 再読み込みしても、取り消しの印は残る
     await page.reload();
     await page.waitForFunction(() => !document.querySelector('#new-chat-top').disabled);
     assert.ok((await page.locator('#messages .message.rejected').count()) >= 1);
     assert.deepEqual(errors, []);
-    console.log('PASS: 端末の情報で答える、複数の依頼を分ける、おすすめは条件を聞く、否定された答えを外す、訂正を最優先、話題の切り替え、再読み込み後も保持。');
+    console.log('PASS: 準備が切れても送信でつながる、計算失敗時に1回つなぎ直す、端末の情報で答える、複数の依頼を分ける、おすすめは条件を聞く、否定された答えを外す、訂正を最優先、話題の切り替え、再読み込み後も保持。');
   } finally {
     await browser?.close();
     server.close();

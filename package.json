@@ -1,6 +1,6 @@
 {
   "name": "ai-safari",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "private": true,
   "scripts": {
     "test": "node tests/run-node.cjs && node --test tests/conversation.test.mjs tests/dialog.test.mjs tests/knowledge.test.mjs tests/chat-tabs.test.mjs"

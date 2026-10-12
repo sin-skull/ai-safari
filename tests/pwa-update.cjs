@@ -14,7 +14,7 @@ const pw = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     try {
       let body = await fs.readFile(file);
       const ext = path.extname(file);
-      if (nextVersion && ['.html', '.js', '.mjs'].includes(ext)) body = Buffer.from(body.toString().replaceAll('0.15.1', '0.15.2-test'));
+      if (nextVersion && ['.html', '.js', '.mjs'].includes(ext)) body = Buffer.from(body.toString().replaceAll('0.15.2', '0.15.3-test'));
       res.writeHead(200, { 'Content-Type': ({ '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm' })[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(body);
     } catch (_) { res.writeHead(404).end(); }
   });
@@ -67,7 +67,7 @@ const pw = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     nextVersion = true;
     await menu();
     await Promise.all([page.waitForEvent('load'), page.locator('#update-app').click()]);
-    await page.waitForFunction(() => document.querySelector('footer').textContent.includes('0.15.2-test'));
+    await page.waitForFunction(() => document.querySelector('footer').textContent.includes('0.15.3-test'));
     await page.waitForFunction(() => document.querySelector('#messages').textContent.includes('更新前の会話'));
     assert.equal(await page.locator('#input').inputValue(), 'まだ送っていない文章');
     await menu();
@@ -79,7 +79,7 @@ const pw = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('ai-safari-conversation-models');
       return (await (await dir.getFileHandle('update-test-marker')).getFile()).text();
     }), 'saved-opfs-model');
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('ai-safari-app-0.15.2-test')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('ai-safari-app-0.15.3-test')));
     // Same-version update must still work as a reload/recovery action.
     await menu();
     await Promise.all([page.waitForEvent('load'), page.locator('#update-app').click()]);
