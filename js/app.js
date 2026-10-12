@@ -3,6 +3,7 @@
 (function () {
   'use strict';
   const $ = (selector) => document.querySelector(selector);
+  const memoryOnly = document.body.dataset.memoryOnly === 'true';
 
   // 読み込まれたスクリプトの版（index.html の ?v= と同じ。sw.js の VERSION とも揃えてある）。画面に出して、更新されたか確かめられるようにする
   const VERSION = (() => {
@@ -501,6 +502,7 @@
     AI.db.tx(db, 'settings', 'readwrite', (t) => AI.db.rq(t.objectStore('settings').put({ name, value })));
 
   async function loadSemantic() {
+    if (memoryOnly) return;
     const row = await getSetting(SEMANTIC_KEY);
     if (row && row.value && row.value.enabled) {
       semantic = row.value;
@@ -797,6 +799,7 @@
   const llmPackOf = (id) => AI.llm.PACKS.find((p) => p.id === id) || AI.llm.available()[0];
 
   async function loadAnswer() {
+    if (memoryOnly) return;
     const row = await getSetting(ANSWER_KEY);
     if (row && row.value) {
       answerCfg = { ...answerCfg, ...row.value, persona: { ...answerCfg.persona, ...(row.value.persona || {}) } };

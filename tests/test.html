@@ -18,6 +18,12 @@
 <h1>ai 回帰テスト</h1>
 <div id="summary">実行中…</div>
 <ul id="results"></ul>
+<pre id="load-errors"></pre>
+<script>
+window.addEventListener('error', (e) => {
+  document.getElementById('load-errors').textContent += (e.message || 'Script could not load: ' + e.target.src) + '\n';
+}, true);
+</script>
 <script src="../js/normalize.js"></script>
 <script src="../js/db.js"></script>
 <script src="../js/terms.js"></script>

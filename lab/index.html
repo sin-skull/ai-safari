@@ -253,6 +253,17 @@ describeEnv();
 let wllama = null;
 let loaded = null; // { model, engine }
 let abort = null;
+let unlock = null;
+async function lockInference() {
+  if (!navigator.locks) throw new Error('このブラウザでは安全なタブ間の実行管理ができません');
+  await new Promise((resolve, reject) => {
+    navigator.locks.request('ai-safari-inference', { ifAvailable: true }, async (lock) => {
+      if (!lock) return reject(new Error('別の会話画面・試験室がモデルを使っています。先にメモリを解放してください。'));
+      await new Promise((done) => { unlock = done; resolve(); });
+    }).catch(reject);
+  });
+}
+function unlockInference() { unlock?.(); unlock = null; }
 
 function newWllama() {
   const w = new Wllama(PATHS, { logger: LoggerWithoutDebug, allowOffline: true, parallelDownloads: 2, cacheManager: new CacheManager([new NamespacedOPFSBackend()]) });
@@ -274,6 +285,7 @@ async function renderCache() {
 renderCache();
 
 function setBusy(busy) {
+  el.clearCache.disabled = busy || !!loaded;
   el.load.disabled = busy || !!loaded;
   el.unload.disabled = busy || !loaded;
   el.ask.disabled = busy || !loaded;
@@ -291,6 +303,7 @@ el.load.addEventListener('click', async () => {
   log(`読み込み開始：${m.label}／${engineLabel(engine)}（GPUの層 ${nGpu === 999 ? '全部' : nGpu}）`);
   const t0 = performance.now();
   try {
+    await lockInference();
     wllama = newWllama();
     stepStart('ダウンロード／保存分の確認');
     let lastPct = -1;
@@ -317,8 +330,14 @@ el.load.addEventListener('click', async () => {
     stepEnd();
     log(`読み込み失敗：${e.message}`);
     addHistory({ model: m.id, engine, ok: false, result: `読み込みエラー：${e.message.slice(0, 80)}` });
-    try { if (wllama) await wllama.exit(); } catch (_) { /* 片付けの失敗は無視 */ }
+    try { if (wllama) await wllama.exit(); }
+    catch (cleanupError) {
+      log(`メモリの解放に失敗しました。再読み込みしてください：${cleanupError.message}`);
+      setBusy(true);
+      return; // Keep the lock; do not allocate another model in this tab.
+    }
     wllama = null;
+    unlockInference();
   }
   setBusy(false);
   renderCache();
@@ -373,9 +392,11 @@ el.stop.addEventListener('click', () => abort && abort.abort());
 
 el.unload.addEventListener('click', async () => {
   setBusy(true);
-  try { if (wllama) await wllama.exit(); } catch (e) { log(`外すときのエラー：${e.message}`); }
+  try { if (wllama) await wllama.exit(); }
+  catch (e) { log(`外すときのエラー：${e.message}`); setBusy(false); return; }
   wllama = null;
   loaded = null;
+  unlockInference();
   log('外しました（保存したモデルは残っています）');
   setBusy(false);
 });

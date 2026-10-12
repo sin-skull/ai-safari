@@ -9,5 +9,5 @@
   "targetDevice": "iPhone 17",
   "requiredBrowser": "Safari",
   "offlineRequired": true,
-  "status": "isolated copy; conversation and offline speech improvements not yet implemented"
+  "status": "0.12.5: offline text conversation implemented; iPhone acceptance and voice remain pending"
 }
