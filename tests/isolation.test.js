@@ -32,7 +32,7 @@ async function serviceWorkerHarness(fakeCaches, fakeFetch) {
 test('isolation: service-worker cleanup only removes copied-app versions', async () => {
   const removed = [];
   const names = ['ai-0.11.3', 'ai-0.11.4', 'ai-lib-1', 'transformers-cache',
-    'ai-safari-app-0.11.4', 'ai-safari-app-0.12.9', AI.store.LIB_CACHE, AI.store.MODEL_CACHE];
+    'ai-safari-app-0.11.4', 'ai-safari-app-0.13.0', AI.store.LIB_CACHE, AI.store.MODEL_CACHE];
   const handlers = await serviceWorkerHarness({
     keys: async () => names,
     delete: async (name) => { removed.push(name); return true; },
@@ -58,5 +58,5 @@ test('isolation: offline navigation reads this app cache, not another app', asyn
     respondWith: (promise) => { response = promise; },
   });
   equal(await (await response).text(), 'copied-app');
-  equal(opened, ['ai-safari-app-0.12.9']);
+  equal(opened, ['ai-safari-app-0.13.0']);
 });

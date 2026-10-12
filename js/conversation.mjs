@@ -1,9 +1,11 @@
 import { PROFILES, ConversationEngine, buildConversation, withReplyPreferences } from './conversation-core.mjs';
 import { NamespacedOPFSBackend } from '../lab/storage.js';
 import { configureRuntime } from './runtime-compat.mjs';
-import { PHRASE_EXAMPLE, phraseKey, findPhrase } from './phrases.mjs';
+import { PHRASE_EXAMPLE, phraseKey, findPhrase, parsePhraseTeaching } from './phrases.mjs';
+import { dictionaryMatches, definitionQuery } from './knowledge.mjs';
+import { createKnowledgeUI } from './knowledge-ui.mjs';
 
-const VERSION = '0.12.9';
+const VERSION = '0.13.0';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';
@@ -14,7 +16,7 @@ const storage = {
   read(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch (_) { return fallback; } },
   write(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} },
 };
-let db, history = [], pending = false, lockRelease = null, cacheManager, lib;
+let db, history = [], pending = false, lockRelease = null, cacheManager, lib, knowledge;
 let events = storage.read(KEY + '-events', []);
 if (!Array.isArray(events)) events = [];
 const previousStep = storage.read(STEP, null);
@@ -43,7 +45,7 @@ async function factory() {
     async loadModelFromUrl(url, options) {
       let model = (await w.modelManager.getModels()).find((m) => m.url === url);
       if (!model) {
-        if (navigator.onLine === false) throw new Error('このモデルはまだ保存されていません。オンラインで一度準備してください。');
+        if (AI.net.isOffline() || navigator.onLine === false) throw new Error('このモデルはまだ保存されていません。オンラインモードで一度準備してください。');
         model = await w.modelManager.downloadModel(url, options);
       }
       setStatus('保存済みモデルをメモリに読み込んでいます…');
@@ -77,7 +79,10 @@ function renderControls() {
   $('diagnostics').disabled = !db;
   $('delete-models').disabled = !db || active;
   $('stop').hidden = engine.state !== 'generating';
-  $('connection').textContent = navigator.onLine === false ? 'オフライン' : '端末内で会話';
+  $('network-mode').disabled = !db || active;
+  $('network-mode').value = AI.net.isOffline() ? 'offline' : 'online';
+  knowledge?.render(active);
+  $('connection').textContent = AI.net.isOffline() || navigator.onLine === false ? 'オフライン · 端末内で会話' : 'オンライン · 端末内で会話';
   const p = selected();
   $('model-note').textContent = $('profile').value !== 'pc'
     ? `CPUで省メモリ動作。初回約${p.mb}MBを取得します。${p.license}。`
@@ -104,6 +109,7 @@ async function action(work) {
   finally { pending = false; $('progress').hidden = true; renderControls(); }
 }
 async function unload() {
+  knowledge?.assertReleased();
   await engine.unload();
   releaseLock();
   setStatus('メモリを解放しました。保存したモデルは残っています。');
@@ -176,7 +182,10 @@ function showHistory() {
   $('welcome').hidden = !!history.length;
   for (const h of history) {
     append('user', h.q);
-    if (h.a) append('assistant', h.a, h.interrupted ? '途中で停止' : h.source === 'phrase' ? '教えてもらったフレーズから返答' : '');
+    if (h.a) {
+      const reply = append('assistant', h.a, h.interrupted ? '途中で停止' : h.source === 'phrase' ? '教えてもらったフレーズから返答' : h.source === 'dictionary' ? '保存した辞書から返答' : '');
+      if (h.referenceText) showReference(reply, h.referenceText);
+    }
   }
 }
 function download(name, data) {
@@ -184,7 +193,33 @@ function download(name, data) {
   const a = document.createElement('a'); a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
-$('prepare').addEventListener('click', () => action(async () => {
+function showReference(reply, text) {
+  const details = document.createElement('details');
+  const summary = document.createElement('summary'); summary.textContent = '参照した内容';
+  const body = document.createElement('p'); body.className = 'reference-text'; body.textContent = text;
+  details.append(summary, body); reply.body.parentElement.append(details);
+}
+async function localReply(query, answer, source, label, referenceText = '') {
+  const pair = { q: query, a: answer, source, referenceText, interrupted: false, at: Date.now() };
+  history.push(pair);
+  try { await saveHistory(); } catch (error) { history.pop(); throw error; }
+  $('input').value = '';
+  append('user', query); const reply = append('assistant', answer, label);
+  if (referenceText) showReference(reply, referenceText);
+  setStatus(label + 'しました。');
+  window.scrollTo(0, document.documentElement.scrollHeight);
+}
+knowledge = createKnowledgeUI({ getDB: () => db, action, unload, acquireLock, releaseLock, setStatus });
+$('network-mode').addEventListener('change', () => {
+  const offline = $('network-mode').value === 'offline';
+  action(async () => {
+    await AI.net.setOffline(db, offline);
+    setStatus(AI.net.isOffline() ? '外部検索とモデル取得を止めました。端末に保存した内容で使えます。' : '情報の取得を許可しました。会話の生成は引き続き端末内です。');
+    if (!AI.net.isOffline()) await prepareOffline();
+  });
+});
+async function prepareConversation() {
+  knowledge?.assertReleased();
   if ($('profile').value === 'pc') {
     const adapter = await navigator.gpu?.requestAdapter();
     if (!adapter) throw new Error('WebGPUを使えません。スマホ用モデルを選んでください。');
@@ -204,7 +239,8 @@ $('prepare').addEventListener('click', () => action(async () => {
     if (document.hidden) { await unload(); return; }
     setStatus('会話できます。モデルは端末に保存済みです。');
   } catch (error) { if (!engine.worker) releaseLock(); throw error; }
-}));
+}
+$('prepare').addEventListener('click', () => action(prepareConversation));
 $('release').addEventListener('click', () => action(unload));
 $('delete-models').addEventListener('click', () => action(async () => {
   if (!window.confirm('この会話画面で取得したモデルを削除しますか？ 会話と記憶は残ります。次回は再ダウンロードが必要です。')) return;
@@ -230,27 +266,38 @@ $('composer').addEventListener('submit', (event) => {
   if (!db || !$('input').value.trim()) return;
   action(async () => {
     const query = $('input').value.trim();
+    const teaching = parsePhraseTeaching(query);
+    if (teaching) {
+      const next = phrases.filter(p => phraseKey(p.q) !== phraseKey(teaching.q));
+      if (next.length >= 100) throw new Error('フレーズは100件まで保存できます。不要なものを削除してください。');
+      await savePhrases([...next, teaching]);
+      await localReply(query, `覚えました。「${teaching.q}」には「${teaching.a}」と返します。`, 'teaching', 'この端末にフレーズを保存');
+      return;
+    }
     const known = findPhrase(query, phrases);
     if (known) {
-      const pair = { q: query, a: known.a, source: 'phrase', interrupted: false, at: Date.now() };
-      history.push(pair);
-      try { await saveHistory(); } catch (error) { history.pop(); throw error; }
-      $('input').value = '';
-      append('user', query); append('assistant', known.a, '教えてもらったフレーズから返答');
-      setStatus('保存したフレーズから返答しました。');
-      window.scrollTo(0, document.documentElement.scrollHeight);
+      await localReply(query, known.a, 'phrase', '教えてもらったフレーズから返答');
+      return;
+    }
+    const exactTerm = (await dictionaryMatches(db, query)).find(t => t.key === AI.normalizeTerm(definitionQuery(query)));
+    if (exactTerm) {
+      await localReply(query, exactTerm.definition, 'dictionary', '保存した辞書から返答', `辞書「${exactTerm.term}」\n${exactTerm.sources.map(s => [s.title, s.url, s.license].filter(Boolean).join(' ')).join('\n')}`);
       return;
     }
     if (engine.state !== 'ready') { setStatus('覚えたフレーズにはありません。通常の会話は「会話を準備」を押してから送ってください。'); return; }
-    const hits = await AI.passages.search(db, query, { limit: 2 }); // lexical lookup, no embedding model
-    const memories = hits.map((h) => h.passage.body);
+    const retrieved = await knowledge.retrieve(query);
+    if (document.hidden) return;
+    if (engine.state !== 'ready') await prepareConversation();
+    if (engine.state !== 'ready') return;
+    const memories = retrieved.notes;
     const preferences = replyPreferences();
     const messages = buildConversation(query, history, memories, withReplyPreferences(selected(), preferences));
     $('input').value = '';
     append('user', query);
     const reply = append('assistant', '考えています…');
+    if (messages.referenceText) showReference(reply, messages.referenceText);
     window.scrollTo(0, document.documentElement.scrollHeight);
-    const pair = { q: query, a: '', interrupted: true, at: Date.now() };
+    const pair = { q: query, a: '', interrupted: true, at: Date.now(), referenceText: messages.referenceText };
     history.push(pair);
     try { await saveHistory(); }
     catch (error) { history.pop(); $('input').value = query; reply.body.textContent = '会話を保存できませんでした。'; throw error; }
@@ -266,7 +313,7 @@ $('composer').addEventListener('submit', (event) => {
       pair.interrupted = result.interrupted;
       reply.body.textContent = result.text || (result.interrupted ? '停止しました。' : '答えが空でした。言い方を変えて試してください。');
       const seconds = ((performance.now() - start) / 1000).toFixed(1);
-      reply.sub.textContent = `${result.interrupted ? '途中で停止 · ' : ''}${seconds}秒${memories.length ? ' · 保存メモを参照（内容は記憶画面で確認できます）' : ''}`;
+      reply.sub.textContent = `${result.interrupted ? '途中で停止 · ' : ''}${seconds}秒${messages.referenceText ? ' · 辞書・保存資料を参照' : ''}${retrieved.semanticError ? ' · 意味検索失敗、言葉の一致で検索' : ''}`;
       log('reply-complete', { seconds: Number(seconds), firstSeconds: first === null ? null : (first - start) / 1000, chars: result.text.length, interrupted: result.interrupted });
       setStatus(result.interrupted ? '停止してメモリを解放しました。「会話を準備」で再開できます。' : '会話できます。');
     } catch (error) { reply.body.textContent = '回答を作れませんでした。' + error.message; throw error; }
@@ -302,7 +349,8 @@ window.addEventListener('pageshow', () => {
 
 async function prepareOffline() {
   if (!navigator.serviceWorker) throw new Error('このブラウザはオフライン起動に対応していません。');
-  const reg = await navigator.serviceWorker.register('sw.js');
+  const reg = AI.net.isOffline() ? await navigator.serviceWorker.getRegistration() : await navigator.serviceWorker.register('sw.js');
+  if (!reg) { $('offline').textContent = 'オンラインモードに切り替えると、オフライン起動用のファイルを保存します。'; return; }
   const showReady = async () => {
     if (await caches.has('ai-safari-app-' + VERSION)) {
       const cache = await caches.open('ai-safari-app-' + VERSION);
@@ -320,6 +368,8 @@ async function prepareOffline() {
 }
 try {
   db = await AI.db.open();
+  await AI.net.load(db);
+  await knowledge.initialize();
   const savedPhrases = await AI.db.tx(db, 'settings', 'readonly', t => AI.db.rq(t.objectStore('settings').get(PHRASE_KEY)));
   if (!savedPhrases) await savePhrases([{ ...PHRASE_EXAMPLE }]);
   else { phrases = (Array.isArray(savedPhrases.value) ? savedPhrases.value : []).filter(p => typeof p?.q === 'string' && typeof p?.a === 'string').slice(0, 100); renderPhrases(); }

@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { PROFILES, ConversationEngine, buildConversation, clipBytes, withReplyPreferences } from '../js/conversation-core.mjs';
-import { PHRASE_EXAMPLE, findPhrase } from '../js/phrases.mjs';
+import { PHRASE_EXAMPLE, findPhrase, parsePhraseTeaching } from '../js/phrases.mjs';
+
+test('explicit teaching commands preserve the requested answer and reject discussion', () => {
+  assert.deepEqual(parsePhraseTeaching('もう恋なんてしないなんて？と言われたら「言わないよ絶対〜」って答えて'), {q: 'もう恋なんてしないなんて？', a: '言わないよ絶対〜'});
+  assert.deepEqual(parsePhraseTeaching('「おかえり」と聞かれたら「ただいま」と返してください。'), {q: 'おかえり', a: 'ただいま'});
+  for (const q of ['「ただいま」って答えてもいい？', '彼におかえりと言われたら嬉しい', 'xと言われたら「y」って答えてと友達に言われた']) assert.equal(parsePhraseTeaching(q), null);
+});
 
 test('taught phrases recognize punctuation and explicit continuation requests, not unrelated questions', () => {
   const phrases = [PHRASE_EXAMPLE, { q: 'おかえり', a: 'ただいま' }];

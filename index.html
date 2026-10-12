@@ -16,6 +16,7 @@
     <header><div><span class="eyebrow">ON YOUR DEVICE</span><h1>ai <span>Safari</span></h1></div><a href="memory.html" id="memory-link">記憶・バックアップ ↗</a></header>
     <div class="app-update"><button id="update-app" type="button">↻ アプリを更新</button><span id="update-status" role="status">オンラインで最新版を確認します。</span></div>
     <section class="setup" aria-label="会話の設定">
+      <div class="network-mode"><label for="network-mode">通信モード</label><select id="network-mode" disabled><option value="offline">オフライン · 保存済みだけ使う</option><option value="online">オンライン · 情報の取得を許可</option></select><p class="muted">会話の生成はどちらも端末内です。オンラインでも検索はボタンを押したときだけ行います。</p></div>
       <div class="setup-top"><label for="profile">使うモデル</label><span class="badge" id="connection">端末内で会話</span></div>
       <select id="profile"><option value="mobile">スマホ用 · Qwen3 0.6B / 約400MB</option><option value="pc">PC用 · Qwen3 0.6B / GPU</option><option value="tiny">最小・動作確認用 · LFM2 350M / 約230MB</option></select>
       <p id="model-note" class="muted"></p>
@@ -29,6 +30,18 @@
       <progress id="progress" max="100" hidden aria-label="モデルの取得状況"></progress>
       <p id="offline" class="muted">オフライン起動の準備を確認中…</p>
     </section>
+    <details class="phrase-memory" id="dictionary-panel">
+      <summary>辞書・参考資料</summary>
+      <p id="knowledge-status" class="muted">辞書を準備しています…</p>
+      <form id="dictionary-form"><label for="dictionary-term">用語</label><input id="dictionary-term" maxlength="200" required><label for="dictionary-definition">説明</label><textarea id="dictionary-definition" maxlength="10000" required></textarea><button id="dictionary-save" disabled>辞書に保存</button></form>
+      <p class="muted">同じ用語は上書きします。編集・削除は「記憶・バックアップ」からも行えます。</p>
+      <label for="dictionary-file">辞書ファイルを読み込む（JSON・同じ用語は今の説明を優先）</label><input id="dictionary-file" type="file" accept=".json,application/json">
+      <form id="knowledge-search-form"><label for="knowledge-query">辞書・資料で調べる言葉</label><input id="knowledge-query" maxlength="200" required><div class="buttons"><button id="knowledge-search" disabled>端末内で調べる</button><button id="web-search" type="button" disabled>Wikipediaで調べる</button></div></form>
+      <p class="muted">Wikipediaで調べる言葉だけを外部へ送ります。結果は選んで保存できます。</p><div id="knowledge-results"></div>
+      <label><input id="semantic-use" type="checkbox"> 会話でも保存済みベクトルを使う（任意）</label>
+      <p class="muted">同じ意味検索モデルが必要です。初回はオンラインで約120MBを取得します。回答用モデルと交互に読み込むため、待ち時間が増えます。</p>
+      <button id="semantic-index" type="button" disabled>意味検索を準備・保存文章を索引化</button><button id="semantic-stop" type="button" hidden>索引化を止める</button>
+    </details>
     <details class="phrase-memory">
       <summary id="phrase-summary">フレーズを教える</summary>
       <p class="muted">教えたフレーズに、保存した返答を返します。オフライン・モデル準備なしで使えます。ネット検索はしません。</p>
@@ -46,12 +59,20 @@
     </section>
     <form id="composer"><label class="sr-only" for="input">メッセージ</label><textarea id="input" rows="2" maxlength="4000" placeholder="話したいことを入力…" disabled></textarea><div class="composer-foot"><span>Shift + Enter で改行</span><button id="stop" type="button" hidden>止める</button><button id="send" class="primary" disabled>送信 ↑</button></div></form>
     <div class="footer-actions"><button id="new-chat" disabled>会話をリセット</button><button id="export-chat" disabled>会話を書き出す</button><button id="diagnostics" disabled>動作記録を書き出す</button><button id="delete-models" disabled>保存モデルを削除</button></div>
-    <footer><span>ai Safari 0.12.9 · 音声会話は今後対応</span><a href="lab/index.html" id="lab-link">試験室</a></footer>
+    <footer><span>ai Safari 0.13.0 · 音声会話は今後対応</span><a href="lab/index.html" id="lab-link">試験室</a></footer>
     <noscript>会話を使うにはJavaScriptを有効にしてください。</noscript>
   </main>
-  <script src="js/normalize.js?v=0.12.9"></script>
-  <script src="js/db.js?v=0.12.9"></script>
-  <script src="js/passages.js?v=0.12.9"></script>
+  <script src="js/normalize.js?v=0.13.0"></script>
+  <script src="js/db.js?v=0.13.0"></script>
+  <script src="js/passages.js?v=0.13.0"></script>
+  <script src="js/terms.js?v=0.13.0"></script>
+  <script src="js/net.js?v=0.13.0"></script>
+  <script src="js/wiki.js?v=0.13.0"></script>
+  <script src="js/store.js?v=0.13.0"></script>
+  <script src="js/embed.js?v=0.13.0"></script>
+  <script src="js/vectors.js?v=0.13.0"></script>
+  <script src="js/hybrid.js?v=0.13.0"></script>
+  <script src="js/rag.js?v=0.13.0"></script>
   <script type="module" src="js/conversation.mjs"></script>
   <script type="module" src="js/app-update.mjs"></script>
 </body>

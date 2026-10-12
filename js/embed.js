@@ -100,6 +100,7 @@
     lib.env.experimental_useCrossOriginStorage = false;
     lib.env.allowLocalModels = false;
     lib.env.allowRemoteModels = true;
+    lib.env.backends.onnx.wasm.numThreads = 1;
     if (!defaultFetch) defaultFetch = lib.env.fetch;
     lib.env.fetch = AI.net.isOffline()
       ? async (url) => {
@@ -142,14 +143,10 @@
       // メモリから外す（ファイルは端末に残る。次に使うときは、保存済みから読み直す）
       async unload() {
         const e = extractor;
-        extractor = null;
         if (e && e.dispose) {
-          try {
-            await e.dispose();
-          } catch (_) {
-            /* 外せなくても、参照は切ってある */
-          }
+          await e.dispose();
         }
+        extractor = null;
       },
       async embed(texts, kind) {
         if (!extractor) throw new Error('モデルの準備ができていません');

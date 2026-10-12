@@ -33,6 +33,7 @@ function activated(worker) {
 button.addEventListener('click', async () => {
   if (button.disabled) return;
   if (!navigator.onLine) { status.textContent = '更新にはインターネット接続が必要です。接続後にもう一度押してください。'; return; }
+  if (globalThis.AI?.net?.isOffline()) { status.textContent = '通信モードをオンラインに切り替えてから更新してください。'; return; }
   button.disabled = true;
   status.textContent = '最新版を確認しています… 更新後に再起動し、実行中の処理は中断します。';
   try {

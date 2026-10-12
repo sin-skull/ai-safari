@@ -63,7 +63,7 @@ export function buildConversation(query, history, memories, profile) {
   let remaining = budget - bytes(system) - bytes(latest.content);
   if (!latest.content) throw new Error('メッセージを入力してください。');
   if (remaining < 0) throw new Error('このモデルで一度に読める長さを超えています。文章を短くして送ってください。');
-  const memo = clipBytes((memories || []).join('\n'), Math.min(420, Math.floor(remaining / 3)));
+  const memo = clipBytes((memories || []).join('\n'), Math.min(profile.gpu > 0 ? 1000 : 420, Math.floor(remaining / 3)));
   if (memo) {
     messages[0].content += '\n保存メモ（参考）:\n' + memo;
     remaining -= bytes('\n保存メモ（参考）:\n' + memo);
@@ -76,7 +76,9 @@ export function buildConversation(query, history, memories, profile) {
     past.unshift({ role: 'user', content: pair.q }, { role: 'assistant', content: pair.a });
     remaining -= cost;
   }
-  return [...messages, ...past, latest];
+  const result = [...messages, ...past, latest];
+  result.referenceText = memo; // Display exactly the excerpt supplied to the model.
+  return result;
 }
 
 export class ConversationEngine {
@@ -137,7 +139,8 @@ export class ConversationEngine {
       });
       try {
         const stream = await Promise.race([cancelled, this.worker.createChatCompletion({
-          messages, max_tokens: withReplyPreferences(this.profile, preferences).output, temperature: 0.1,
+          messages, max_tokens: withReplyPreferences(this.profile, preferences).output,
+          temperature: 0.1,
           chat_template_kwargs: { enable_thinking: false },
           stream: true, abortSignal: this.controller.signal,
         })]);
