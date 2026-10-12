@@ -14,7 +14,7 @@ const pw = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     try {
       let body = await fs.readFile(file);
       const ext = path.extname(file);
-      if (nextVersion && ['.html', '.js', '.mjs'].includes(ext)) body = Buffer.from(body.toString().replaceAll('0.12.7', '0.12.8-test'));
+      if (nextVersion && ['.html', '.js', '.mjs'].includes(ext)) body = Buffer.from(body.toString().replaceAll('0.12.8', '0.12.9-test'));
       res.writeHead(200, { 'Content-Type': ({ '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm' })[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(body);
     } catch (_) { res.writeHead(404).end(); }
   });
@@ -30,6 +30,8 @@ const pw = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     await page.waitForFunction(() => document.querySelector('#offline').textContent.includes('保存済み'));
     await page.reload();
     await page.waitForFunction(() => !document.querySelector('#prepare').disabled);
+    await page.locator('#reply-tone').selectOption('friendly');
+    await page.locator('#reply-length').selectOption('detailed');
     await page.evaluate(async () => {
       const db = await AI.db.open();
       await AI.db.tx(db, 'settings', 'readwrite', t => AI.db.rq(t.objectStore('settings').put({ name: 'conversation-v1', value: [{q: '更新前の会話', a: '保存されています', at: 1}] })));
@@ -44,15 +46,17 @@ const pw = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     });
     nextVersion = true;
     await Promise.all([page.waitForEvent('load'), page.locator('#update-app').click()]);
-    await page.waitForFunction(() => document.querySelector('footer').textContent.includes('0.12.8-test'));
+    await page.waitForFunction(() => document.querySelector('footer').textContent.includes('0.12.9-test'));
     await page.waitForFunction(() => document.querySelector('#messages').textContent.includes('更新前の会話'));
     assert.equal(await page.locator('#input').inputValue(), 'まだ送っていない文章');
+    assert.equal(await page.locator('#reply-tone').inputValue(), 'friendly');
+    assert.equal(await page.locator('#reply-length').inputValue(), 'detailed');
     assert.equal(await page.evaluate(async () => (await (await caches.open('model-preservation-test')).match('marker')).text()), 'saved-model');
     if (chromium) assert.equal(await page.evaluate(async () => {
       const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('ai-safari-conversation-models');
       return (await (await dir.getFileHandle('update-test-marker')).getFile()).text();
     }), 'saved-opfs-model');
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('ai-safari-app-0.12.8-test')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('ai-safari-app-0.12.9-test')));
     // Same-version update must still work as a reload/recovery action.
     await Promise.all([page.waitForEvent('load'), page.locator('#update-app').click()]);
     await page.waitForFunction(() => !document.querySelector('#prepare').disabled);

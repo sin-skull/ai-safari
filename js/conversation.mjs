@@ -1,8 +1,8 @@
-import { PROFILES, ConversationEngine, buildConversation } from './conversation-core.mjs';
+import { PROFILES, ConversationEngine, buildConversation, withReplyPreferences } from './conversation-core.mjs';
 import { NamespacedOPFSBackend } from '../lab/storage.js';
 import { configureRuntime } from './runtime-compat.mjs';
 
-const VERSION = '0.12.7';
+const VERSION = '0.12.8';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';
@@ -21,6 +21,7 @@ const log = (event, extra = {}) => {
 };
 const setStatus = (text) => { $('status').textContent = text; };
 const selected = () => PROFILES[$('profile').value];
+const replyPreferences = () => ({ tone: $('reply-tone').value, length: $('reply-length').value });
 const asset = (path) => new URL(path, import.meta.url).href;
 async function vendor() {
   lib ||= await import('../lab/vendor/wllama-3.6.1/index.js');
@@ -63,6 +64,8 @@ function renderControls() {
   const active = pending || ['loading', 'generating', 'unloading'].includes(engine.state);
   $('prepare').disabled = !db || active || engine.state === 'ready';
   $('profile').disabled = !db || active;
+  $('reply-tone').disabled = active;
+  $('reply-length').disabled = active;
   $('release').disabled = active || !engine.worker;
   $('send').disabled = !db || active || engine.state !== 'ready';
   $('input').disabled = !db || active || engine.state !== 'ready';
@@ -176,6 +179,12 @@ $('profile').addEventListener('change', () => action(async () => {
   setStatus('モデルを切り替えました。「会話を準備」を押してください。');
 }));
 $('stop').addEventListener('click', () => { engine.stop(); setStatus('停止しています…'); });
+for (const id of ['reply-tone', 'reply-length']) $(id).addEventListener('change', () => {
+  storage.write(KEY + '-reply', replyPreferences());
+  $('reply-note').textContent = $('reply-length').value === 'detailed'
+    ? '次の回答から詳しく説明します。生成に時間がかかり、読み返せる過去の会話は短くなります。'
+    : '次の回答から反映します。モデルの再取得は不要です。';
+});
 $('composer').addEventListener('submit', (event) => {
   event.preventDefault();
   if (engine.state !== 'ready' || !$('input').value.trim()) return;
@@ -183,7 +192,8 @@ $('composer').addEventListener('submit', (event) => {
     const query = $('input').value.trim();
     const hits = await AI.passages.search(db, query, { limit: 2 }); // lexical lookup, no embedding model
     const memories = hits.map((h) => h.passage.body);
-    const messages = buildConversation(query, history, memories, selected());
+    const preferences = replyPreferences();
+    const messages = buildConversation(query, history, memories, withReplyPreferences(selected(), preferences));
     $('input').value = '';
     append('user', query);
     const reply = append('assistant', '考えています…');
@@ -199,7 +209,7 @@ $('composer').addEventListener('submit', (event) => {
         const atEnd = document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 260;
         reply.body.textContent = text || '考えています…';
         if (atEnd) window.scrollTo(0, document.documentElement.scrollHeight);
-      });
+      }, preferences);
       pair.a = result.text;
       pair.interrupted = result.interrupted;
       reply.body.textContent = result.text || (result.interrupted ? '停止しました。' : '答えが空でした。言い方を変えて試してください。');
@@ -262,6 +272,10 @@ try {
   history = (Array.isArray(row?.value) ? row.value : []).filter((h) => typeof h?.q === 'string' && typeof h?.a === 'string').slice(-40);
   const profile = storage.read(KEY + '-profile', 'mobile');
   $('profile').value = PROFILES[profile] ? profile : 'mobile';
+  const reply = storage.read(KEY + '-reply', {}) || {};
+  $('reply-tone').value = ['standard', 'friendly', 'polite'].includes(reply.tone) ? reply.tone : 'standard';
+  $('reply-length').value = ['short', 'standard', 'detailed'].includes(reply.length) ? reply.length : 'standard';
+  if ($('reply-length').value === 'detailed') $('reply-note').textContent = '次の回答から詳しく説明します。生成に時間がかかり、読み返せる過去の会話は短くなります。';
   showHistory(); renderControls();
   const locks = await navigator.locks?.query?.().catch(() => null);
   const anotherTab = locks?.held?.some((lock) => lock.name === 'ai-safari-inference');

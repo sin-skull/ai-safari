@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
-import { PROFILES, ConversationEngine, buildConversation, clipBytes } from '../js/conversation-core.mjs';
+import { PROFILES, ConversationEngine, buildConversation, clipBytes, withReplyPreferences } from '../js/conversation-core.mjs';
 
 test('Japanese text budget preserves current question and complete recent exchanges', () => {
   const history = Array.from({ length: 30 }, (_, i) => ({ q: '前の質問' + i, a: '答えです。'.repeat(12) }));
@@ -22,6 +22,7 @@ test('No-document conversation is allowed; stopped answers are excluded from con
 
 function harness({ failLoad = false, failExit = false, blockGeneration = false } = {}) {
   const calls = [];
+  const generated = [];
   let finish;
   const gate = new Promise((r) => { finish = r; });
   let count = 0;
@@ -32,6 +33,7 @@ function harness({ failLoad = false, failExit = false, blockGeneration = false }
       async loadModelFromUrl(url, options) { calls.push('load:' + id); assert.equal(options.n_parallel, 1); if (failLoad) throw new Error('load failed'); },
       async exit() { calls.push('exit:' + id); if (failExit) throw new Error('exit failed'); },
       async *createChatCompletion(options) {
+        generated.push(options);
         calls.push('generate:' + id);
         yield { choices: [{ delta: { content: 'こんにちは' } }] };
         if (blockGeneration) await gate;
@@ -40,8 +42,34 @@ function harness({ failLoad = false, failExit = false, blockGeneration = false }
       },
     };
   });
-  return { engine, calls, finish };
+  return { engine, calls, finish, generated };
 }
+
+test('reply length reserves generation space for every profile and tone', () => {
+  for (const base of Object.values(PROFILES)) for (const tone of ['standard', 'friendly', 'polite']) {
+    const short = withReplyPreferences(base, { tone, length: 'short' });
+    const detailed = withReplyPreferences(base, { tone, length: 'detailed' });
+    assert.ok(detailed.output > short.output);
+    assert.equal(detailed.context, base.context, 'Changing style must not resize the loaded model');
+    const messages = buildConversation('説明してください。', Array.from({length: 6}, () => ({q: '質問'.repeat(50), a: '回答'.repeat(70)})), ['メモ'.repeat(500)], detailed);
+    const promptBytes = messages.reduce((total, m) => total + Buffer.byteLength(m.content), 0);
+    assert.ok(promptBytes + detailed.output + 256 <= base.context);
+    assert.equal(messages.at(-1).content, '説明してください。');
+    assert.ok(messages[0].content.includes(detailed.toneInstruction));
+    assert.ok(messages[0].content.includes(detailed.lengthInstruction));
+  }
+});
+
+test('changing reply preferences changes generation limits without reloading the model', async () => {
+  const { engine, calls, generated } = harness();
+  await engine.load(PROFILES.pc);
+  await engine.generate([], () => {}, { length: 'short' });
+  await engine.generate([], () => {}, { length: 'detailed' });
+  assert.equal(generated[0].max_tokens, 128);
+  assert.equal(generated[1].max_tokens, 768);
+  assert.equal(calls.filter(c => c.startsWith('new:')).length, 1);
+  assert.ok(!calls.some(c => c.startsWith('exit:')));
+});
 test('simultaneous model changes release old worker before creating a new worker', async () => {
   const { engine, calls } = harness();
   await Promise.all([engine.load(PROFILES.mobile), engine.load(PROFILES.pc)]);

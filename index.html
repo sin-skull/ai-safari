@@ -19,6 +19,11 @@
       <div class="setup-top"><label for="profile">使うモデル</label><span class="badge" id="connection">端末内で会話</span></div>
       <select id="profile"><option value="mobile">スマホ用 · Qwen3 0.6B / 約400MB</option><option value="pc">PC用 · Qwen3 0.6B / GPU</option><option value="tiny">最小・動作確認用 · LFM2 350M / 約230MB</option></select>
       <p id="model-note" class="muted"></p>
+      <div class="reply-settings" aria-label="回答の設定">
+        <label for="reply-tone">口調<select id="reply-tone"><option value="standard">標準</option><option value="friendly">親しみやすい</option><option value="polite">丁寧</option></select></label>
+        <label for="reply-length">回答の長さ<select id="reply-length"><option value="short">短め</option><option value="standard" selected>標準</option><option value="detailed">詳しく</option></select></label>
+      </div>
+      <p id="reply-note" class="muted" role="status">次の回答から反映します。モデルの再取得は不要です。</p>
       <div class="buttons"><button id="prepare" class="primary" disabled>会話を準備</button><button id="release" disabled>メモリを解放</button></div>
       <p id="status" role="status">アプリを準備しています…</p>
       <progress id="progress" max="100" hidden aria-label="モデルの取得状況"></progress>
@@ -30,12 +35,12 @@
     </section>
     <form id="composer"><label class="sr-only" for="input">メッセージ</label><textarea id="input" rows="2" maxlength="4000" placeholder="話したいことを入力…" disabled></textarea><div class="composer-foot"><span>Shift + Enter で改行</span><button id="stop" type="button" hidden>止める</button><button id="send" class="primary" disabled>送信 ↑</button></div></form>
     <div class="footer-actions"><button id="new-chat" disabled>会話をリセット</button><button id="export-chat" disabled>会話を書き出す</button><button id="diagnostics" disabled>動作記録を書き出す</button><button id="delete-models" disabled>保存モデルを削除</button></div>
-    <footer><span>ai Safari 0.12.7 · 音声会話は今後対応</span><a href="lab/index.html" id="lab-link">試験室</a></footer>
+    <footer><span>ai Safari 0.12.8 · 音声会話は今後対応</span><a href="lab/index.html" id="lab-link">試験室</a></footer>
     <noscript>会話を使うにはJavaScriptを有効にしてください。</noscript>
   </main>
-  <script src="js/normalize.js?v=0.12.7"></script>
-  <script src="js/db.js?v=0.12.7"></script>
-  <script src="js/passages.js?v=0.12.7"></script>
+  <script src="js/normalize.js?v=0.12.8"></script>
+  <script src="js/db.js?v=0.12.8"></script>
+  <script src="js/passages.js?v=0.12.8"></script>
   <script type="module" src="js/conversation.mjs"></script>
   <script type="module" src="js/app-update.mjs"></script>
 </body>
