@@ -124,6 +124,7 @@
 <script type="module">
 import { Wllama, LoggerWithoutDebug, CacheManager } from './vendor/wllama-3.6.1/index.js';
 import { NamespacedOPFSBackend } from './storage.js';
+import { configureRuntime } from '../js/runtime-compat.mjs';
 
 const abs = (p) => new URL(p, location.href).href;
 const PATHS = { default: abs('./vendor/wllama-3.6.1/wasm/wllama.wasm') };
@@ -305,6 +306,7 @@ el.load.addEventListener('click', async () => {
   try {
     await lockInference();
     wllama = newWllama();
+    configureRuntime(wllama, COMPAT, nGpu === 0);
     stepStart('ダウンロード／保存分の確認');
     let lastPct = -1;
     await wllama.loadModelFromUrl(m.url, {

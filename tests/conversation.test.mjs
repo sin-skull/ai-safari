@@ -101,10 +101,22 @@ test('service-worker precache contains all imported runtime files and separates 
   let installing;
   handlers.install({ waitUntil: (p) => { installing = p; } }); await installing;
   for (const path of added) assert.ok(existsSync(path.split('?')[0]), path);
-  for (const file of ['js/conversation.mjs', 'js/conversation-core.mjs', 'lab/storage.js', 'lab/vendor/wllama-3.6.1/index.js', 'lab/vendor/wllama-3.6.1/wasm/wllama.wasm', 'lab/vendor/wllama-compat-3.6.1/wasm/wllama.js', 'lab/vendor/wllama-compat-3.6.1/wasm/wllama.wasm']) assert.ok(added.includes('./' + file), file);
+  for (const file of ['js/conversation.mjs', 'js/conversation-core.mjs', 'js/runtime-compat.mjs', 'lab/storage.js', 'lab/vendor/wllama-3.6.1/index.js', 'lab/vendor/wllama-3.6.1/wasm/wllama.wasm', 'lab/vendor/wllama-compat-3.6.1/wasm/wllama.js', 'lab/vendor/wllama-compat-3.6.1/wasm/wllama.wasm']) assert.ok(added.includes('./' + file), file);
   for (const page of ['', 'memory.html', 'lab/index.html']) {
     let response;
     handlers.fetch({ request: { url: 'https://test.invalid/ai-safari/' + page, method: 'GET', mode: 'navigate' }, respondWith: (p) => { response = p; } });
     assert.equal(await (await response).text(), './' + (page || 'index.html'));
   }
+});
+
+test('CPU bypasses the unreliable Memory64 probe while GPU retains vendor selection', async () => {
+  const { configureRuntime } = await import('../js/runtime-compat.mjs');
+  const paths = { worker: 'https://example.test/compat.js', wasm: 'https://example.test/compat.wasm' };
+  const normal = () => ({ compat: false, wasmPath: 'modern.wasm' });
+  const cpu = { setCompat() {}, getWorkerResources: normal };
+  configureRuntime(cpu, paths, true);
+  assert.deepEqual(cpu.getWorkerResources(), { wasmPath: paths.wasm, jsPath: paths.worker, compat: true });
+  const gpu = { setCompat() {}, getWorkerResources: normal };
+  configureRuntime(gpu, paths, false);
+  assert.equal(gpu.getWorkerResources, normal);
 });

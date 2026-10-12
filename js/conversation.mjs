@@ -1,7 +1,8 @@
 import { PROFILES, ConversationEngine, buildConversation } from './conversation-core.mjs';
 import { NamespacedOPFSBackend } from '../lab/storage.js';
+import { configureRuntime } from './runtime-compat.mjs';
 
-const VERSION = '0.12.5';
+const VERSION = '0.12.6';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';
@@ -43,6 +44,7 @@ async function factory() {
       }
       setStatus('保存済みモデルをメモリに読み込んでいます…');
       $('progress').hidden = true;
+      configureRuntime(w, { worker: asset('../lab/vendor/wllama-compat-3.6.1/wasm/wllama.js'), wasm: asset('../lab/vendor/wllama-compat-3.6.1/wasm/wllama.wasm') }, options.n_gpu_layers === 0);
       await w.loadModel(await model.open(), options);
     },
     createChatCompletion: (options) => w.createChatCompletion(options),
