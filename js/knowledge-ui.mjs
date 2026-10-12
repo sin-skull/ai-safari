@@ -6,7 +6,7 @@ export function createKnowledgeUI({ getDB, action, unload, acquireLock, releaseL
   let stopped = false, releaseFailed = false;
   async function refresh() {
     const state = await AI.vectors.status(getDB(), provider);
-    $('knowledge-status').textContent = `辞書 ${await AI.terms.count(getDB())}件 · 保存文章 ${state.total}件 · この意味検索モデルの索引 ${state.indexed}件。内蔵辞書は基礎12語です。`;
+    $('knowledge-status').textContent = `辞書 ${await AI.terms.count(getDB())}件 · 保存文章 ${state.total}件 · この意味検索モデルの索引 ${state.indexed}件。内蔵辞書は基礎17語です（総合辞書ではありません）。`;
   }
   async function semantic(work) {
     if (releaseFailed) throw new Error('意味検索モデルを解放できませんでした。アプリを更新・再起動してください。');

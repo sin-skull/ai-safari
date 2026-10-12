@@ -1,7 +1,7 @@
 // Service Worker：アプリ本体をキャッシュして、電波が無くても開けるようにする。
 // VERSION は index.html のスクリプトの ?v= と同じにする（tests で食い違いを検出）。
 // 外部（Wikipedia など）の通信はここでは扱わない。同じオリジンのファイルだけを対象にする。
-const VERSION = '0.14.1';
+const VERSION = '0.15.0';
 const CACHE = `ai-safari-app-${VERSION}`;
 const FILES = [
   './index.html',
@@ -16,6 +16,7 @@ const FILES = [
   './js/knowledge-ui.mjs',
   './js/chat-tabs.mjs',
   './js/menu.mjs',
+  './js/dialog.mjs',
   './lab/index.html',
   './lab/storage.js',
   './lab/vendor/wllama-3.6.1/index.js',

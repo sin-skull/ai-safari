@@ -9,5 +9,5 @@
   "targetDevice": "iPhone 17",
   "requiredBrowser": "Safari",
   "offlineRequired": true,
-  "status": "0.12.6: offline text conversation implemented; iPhone acceptance and voice remain pending"
+  "status": "0.15.0: device answers, correction handling, topic-aware context, split requests; Japanese model candidates added but not yet evaluated"
 }

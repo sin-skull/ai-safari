@@ -14,7 +14,26 @@ export const STARTER_TERMS = [
   ['光合成', '植物などが光のエネルギーを利用して、二酸化炭素などから有機物を作る働き。植物の光合成では酸素も放出される。'],
 ];
 
+// 2026-10-13 追加：実際の会話で聞かれたのに、辞書に無かった日常語（説明はこのアプリのために書いたもの）
+export const STARTER_TERMS_V2 = [
+  ['いわゆる', '世間で一般にそう呼ばれている、という意味。「いわゆる天才」のように、よく知られた呼び方を持ち出すときに使う。'],
+  ['扇風機', '羽根を電気で回して風を送る家電。体に風を当てて涼しく感じさせる。部屋の空気をかき回すのにも使う。'],
+  ['時間', '過去から未来へ流れていく、ものごとの移り変わりの尺度。また、ある時刻からある時刻までの長さ。'],
+  ['状態', 'ある時点での、ものごとのありさまや様子。'],
+  ['無駄', '役に立たないこと。使ったのに効果や得るものがないこと。'],
+];
+
 export async function initializeDictionary(db) {
+  const AI = globalThis.AI;
+  const v2 = await AI.db.tx(db, 'settings', 'readonly', t => AI.db.rq(t.objectStore('settings').get('starter-dictionary-v2')));
+  if (!v2) {
+    for (const [term, definition] of STARTER_TERMS_V2) await AI.terms.add(db, term, definition, { onConflict: 'ignore', source: { title: 'ai Safari 内蔵基礎辞書' } });
+    await AI.db.tx(db, 'settings', 'readwrite', t => AI.db.rq(t.objectStore('settings').put({ name: 'starter-dictionary-v2', value: true })));
+  }
+  return initializeDictionaryV1(db);
+}
+
+async function initializeDictionaryV1(db) {
   const AI = globalThis.AI;
   const row = await AI.db.tx(db, 'settings', 'readonly', t => AI.db.rq(t.objectStore('settings').get('starter-dictionary-v1')));
   if (row) return;

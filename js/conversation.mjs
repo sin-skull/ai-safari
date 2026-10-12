@@ -6,8 +6,9 @@ import { dictionaryMatches, definitionQuery } from './knowledge.mjs';
 import { createKnowledgeUI } from './knowledge-ui.mjs';
 import { openChats, listChats, updateChat, selectChat, addChat, removeChat } from './chat-tabs.mjs';
 import { closeMenu } from './menu.mjs';
+import { deviceAnswer, isCorrection, applyCorrection, splitRequests, recommendQuestion, recommendInstruction } from './dialog.mjs';
 
-const VERSION = '0.14.1';
+const VERSION = '0.15.0';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';
@@ -97,6 +98,7 @@ function renderControls() {
     ? `CPUで省メモリ動作。初回約${p.mb}MBを取得します。${p.license}。`
     : `WebGPUを使用。初回約${p.mb}MBを取得します。${p.license}。`;
   if ($('profile').value === 'tiny') $('model-note').textContent += ' 日本語の品質は低めです。会話にはスマホ用を選んでください。';
+  if (p.candidate) $('model-note').textContent += ' 日本語の会話の候補です（評価中）。iPhoneでの読み込み時間・安定性は未確認です。大きいモデルほど、最初の答えまで時間がかかります。';
 }
 function releaseLock() { lockRelease?.(); lockRelease = null; }
 async function acquireLock() {
@@ -241,13 +243,16 @@ function append(role, text, note = '') {
   while ($('messages').children.length > 80) $('messages').firstElementChild.remove();
   return { body, sub };
 }
+const SOURCE_LABEL = { phrase: '教えてもらったフレーズから返答', dictionary: '保存した辞書から返答', device: 'この端末の情報から返答', correction: '前の答えを取り消し', 'recommend-ask': '用語は辞書から・おすすめは条件の確認' };
 function showHistory() {
   $('messages').replaceChildren();
   $('welcome').hidden = !!history.length;
   for (const h of history) {
     append('user', h.q);
     if (h.a) {
-      const reply = append('assistant', h.a, h.interrupted ? '途中で停止' : h.source === 'phrase' ? '教えてもらったフレーズから返答' : h.source === 'dictionary' ? '保存した辞書から返答' : '');
+      const label = h.rejected ? '取り消した答え（以後の根拠に使いません）' : h.interrupted ? '途中で停止' : SOURCE_LABEL[h.source] || '';
+      const reply = append('assistant', h.a, label);
+      if (h.rejected) reply.body.parentElement.classList.add('rejected');
       if (h.referenceText) showReference(reply, h.referenceText);
     }
   }
@@ -263,8 +268,8 @@ function showReference(reply, text) {
   const body = document.createElement('p'); body.className = 'reference-text'; body.textContent = text;
   details.append(summary, body); reply.body.parentElement.append(details);
 }
-async function localReply(query, answer, source, label, referenceText = '') {
-  const pair = { q: query, a: answer, source, referenceText, interrupted: false, at: Date.now() };
+async function localReply(query, answer, source, label, referenceText = '', extra = {}) {
+  const pair = { q: query, a: answer, source, referenceText, interrupted: false, at: Date.now(), ...extra };
   history.push(pair);
   $('input').value = '';
   try { await saveHistory(); } catch (error) { history.pop(); $('input').value = query; throw error; }
@@ -344,47 +349,100 @@ $('composer').addEventListener('submit', (event) => {
       await localReply(query, known.a, 'phrase', '教えてもらったフレーズから返答');
       return;
     }
+    // 1. 時刻・日付・通信状態は、端末の情報で答える（モデルを使わない。オフラインでも答えられる）
+    const device = deviceAnswer(query, { offline: AI.net.isOffline(), online: navigator.onLine !== false });
+    if (device) { await localReply(query, device.text, 'device', 'この端末の情報から返答'); return; }
+    // 2. 訂正・否定：直前のモデルの答えを、以後の根拠から外す
+    if (isCorrection(query) && history.length) {
+      applyCorrection(history, query);
+      const informative = /(じゃなくて|ではなく|正しくは|本当は|ほんとは)/u.test(query) || /^(私|わたし|僕|ぼく|俺)/u.test(query);
+      if (!informative) {
+        await localReply(query, 'すみません、前の答えは間違っていました。この答えは、これからの回答の根拠に使いません。知りたいことを、もう一度教えてください。', 'correction', '前の答えを取り消し', '', { correction: false });
+        showHistory(); // 取り消した答えを薄く表示し直す
+        return;
+      }
+      showHistory();
+      await modelReply(query, { correction: true });
+      return;
+    }
+    // 3. 1回の送信に複数の依頼があれば分ける。用語の意味は辞書、おすすめは条件を聞いてから
+    const last = history.at(-1);
+    const parts = splitRequests(query);
+    if (last?.source === 'recommend-ask' && parts.every((p) => p.kind === 'chat')) {
+      await modelReply(query, { extraSystem: recommendInstruction(last.topic, query), recommendFor: last.topic });
+      return;
+    }
+    const multi = parts.length > 1 || parts.some((p) => p.kind === 'recommend');
+    if (multi) {
+      const lines = [];
+      const refs = [];
+      let topic = null;
+      for (const part of parts) {
+        if (part.kind === 'define') {
+          const hit = (await dictionaryMatches(db, part.term)).find((t) => t.key === AI.normalizeTerm(part.term));
+          if (hit) { lines.push(`「${hit.term}」：${hit.definition}`); refs.push(`辞書「${hit.term}」`); }
+          else lines.push(`「${part.term}」は、この端末の辞書にありません。${AI.net.isOffline() ? '' : 'メニューの「辞書・参考資料」で調べて保存すると、次から答えられます。'}`);
+        } else if (part.kind === 'recommend') {
+          topic = part.topic;
+          lines.push(recommendQuestion(part.topic));
+        }
+      }
+      const chatParts = parts.filter((p) => p.kind === 'chat').map((p) => p.text);
+      if (lines.length) await localReply(query, lines.join('\n\n'), topic ? 'recommend-ask' : 'dictionary', topic ? '用語は辞書から・おすすめは条件の確認' : '保存した辞書から返答', refs.join('\n'), topic ? { topic } : {});
+      if (chatParts.length) await modelReply(chatParts.join(' '));
+      return;
+    }
+    const single = parts[0];
     const exactTerm = (await dictionaryMatches(db, query)).find(t => t.key === AI.normalizeTerm(definitionQuery(query)));
     if (exactTerm) {
       await localReply(query, exactTerm.definition, 'dictionary', '保存した辞書から返答', `辞書「${exactTerm.term}」\n${exactTerm.sources.map(s => [s.title, s.url, s.license].filter(Boolean).join(' ')).join('\n')}`);
       return;
     }
-    if (engine.state !== 'ready') { setStatus('覚えたフレーズにはありません。通常の会話は「会話を準備」を押してから送ってください。'); return; }
-    const retrieved = await knowledge.retrieve(query);
-    if (document.hidden) return;
-    if (engine.state !== 'ready') await prepareConversation();
-    if (engine.state !== 'ready') return;
-    const memories = retrieved.notes;
-    const preferences = replyPreferences();
-    const messages = buildConversation(query, history, memories, withReplyPreferences(selected(), preferences));
-    $('input').value = '';
-    append('user', query);
-    const reply = append('assistant', '考えています…');
-    if (messages.referenceText) showReference(reply, messages.referenceText);
-    window.scrollTo(0, document.documentElement.scrollHeight);
-    const pair = { q: query, a: '', interrupted: true, at: Date.now(), referenceText: messages.referenceText };
-    history.push(pair);
-    try { await saveHistory(); }
-    catch (error) { history.pop(); $('input').value = query; reply.body.textContent = '会話を保存できませんでした。'; throw error; }
-    const start = performance.now(); let first = null;
-    try {
-      const result = await engine.generate(messages, (text) => {
-        if (text && first === null) first = performance.now();
-        const atEnd = document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 260;
-        reply.body.textContent = text || '考えています…';
-        if (atEnd) window.scrollTo(0, document.documentElement.scrollHeight);
-      }, preferences);
-      pair.a = result.text;
-      pair.interrupted = result.interrupted;
-      reply.body.textContent = result.text || (result.interrupted ? '停止しました。' : '答えが空でした。言い方を変えて試してください。');
-      const seconds = ((performance.now() - start) / 1000).toFixed(1);
-      reply.sub.textContent = `${result.interrupted ? '途中で停止 · ' : ''}${seconds}秒${messages.referenceText ? ' · 辞書・保存資料を参照' : ''}${retrieved.semanticError ? ' · 意味検索失敗、言葉の一致で検索' : ''}`;
-      log('reply-complete', { seconds: Number(seconds), firstSeconds: first === null ? null : (first - start) / 1000, chars: result.text.length, interrupted: result.interrupted });
-      setStatus(result.interrupted ? '停止してメモリを解放しました。「会話を準備」で再開できます。' : '会話できます。');
-    } catch (error) { reply.body.textContent = '回答を作れませんでした。' + error.message; throw error; }
-    finally { await saveHistory(); if (!engine.worker) releaseLock(); }
+    const extraSystem = single?.kind === 'define'
+      ? `利用者は「${single.term}」という言葉の意味を聞いている。一般的な意味を1〜2文で説明する。前の会話の答えの言い回しを使い回さない。確かでなければ、分からないと言う。`
+      : '';
+    await modelReply(query, { extraSystem });
   });
 });
+
+// モデルで答える（会話を準備していなければ案内だけ）。correction：利用者の訂正（最優先の事実として残す）
+async function modelReply(query, { extraSystem = '', correction = false, recommendFor = null } = {}) {
+  if (engine.state !== 'ready') { setStatus('覚えたフレーズや辞書にはありません。通常の会話は「会話を準備」を押してから送ってください。'); return; }
+  const retrieved = await knowledge.retrieve(query);
+  if (document.hidden) return;
+  if (engine.state !== 'ready') await prepareConversation();
+  if (engine.state !== 'ready') return;
+  const memories = retrieved.notes;
+  const preferences = replyPreferences();
+  const pair = { q: query, a: '', interrupted: true, at: Date.now(), referenceText: '', source: 'model', ...(correction ? { correction: true } : {}), ...(recommendFor ? { recommendFor } : {}) };
+  const messages = buildConversation(query, history.concat(correction ? [pair] : []), memories, withReplyPreferences(selected(), preferences), { extraSystem });
+  pair.referenceText = messages.referenceText;
+  $('input').value = '';
+  append('user', query);
+  const reply = append('assistant', '考えています…');
+  if (messages.referenceText) showReference(reply, messages.referenceText);
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  history.push(pair);
+  try { await saveHistory(); }
+  catch (error) { history.pop(); $('input').value = query; reply.body.textContent = '会話を保存できませんでした。'; throw error; }
+  const start = performance.now(); let first = null;
+  try {
+    const result = await engine.generate(messages, (text) => {
+      if (text && first === null) first = performance.now();
+      const atEnd = document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 260;
+      reply.body.textContent = text || '考えています…';
+      if (atEnd) window.scrollTo(0, document.documentElement.scrollHeight);
+    }, preferences);
+    pair.a = result.text;
+    pair.interrupted = result.interrupted;
+    reply.body.textContent = result.text || (result.interrupted ? '停止しました。' : '答えが空でした。言い方を変えて試してください。');
+    const seconds = ((performance.now() - start) / 1000).toFixed(1);
+    reply.sub.textContent = `${result.interrupted ? '途中で停止 · ' : ''}${seconds}秒${messages.referenceText ? ' · 辞書・保存資料を参照' : ''}${retrieved.semanticError ? ' · 意味検索失敗、言葉の一致で検索' : ''}`;
+    log('reply-complete', { seconds: Number(seconds), firstSeconds: first === null ? null : (first - start) / 1000, chars: result.text.length, interrupted: result.interrupted, pastPairs: Math.max(0, (messages.length - 2) / 2) });
+    setStatus(result.interrupted ? '停止してメモリを解放しました。「会話を準備」で再開できます。' : '会話できます。');
+  } catch (error) { reply.body.textContent = '回答を作れませんでした。' + error.message; throw error; }
+  finally { await saveHistory(); if (!engine.worker) releaseLock(); }
+}
 $('input').addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); }
 });

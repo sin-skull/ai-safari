@@ -85,3 +85,40 @@ Remove-Item Env:QUALITY_NATIVE
 この7場面だけへの最適化で終わらせず、別の名前・言い回し・話題と複数回の生成で再評価する。特に、日本語の複数ターン会話を学習したモデル、量子化による劣化、履歴と話者情報の渡し方を優先して検討する。資料で事実を補う場合も、資料の意味を読み違えずに答えることを確認する。
 
 会話品質が通ってから、iPhone 17 Safariで機内モード・再起動・連続会話・停止・メモリ解放を検証する。今回の評価をもって実機対応や自然言語会話の完成とはしない。音声・コード生成・アプリ開発は、その基盤ができてから進める。
+
+
+## 0.15.0 で追加した候補と場面（未評価）
+
+実施予定。**ここに書いた候補は、まだどれも実モデルで評価していない**（0.15.0 を作った環境からは Hugging Face のモデルを取得できなかった）。
+
+選んだ理由：これまでの候補（Qwen 系、LFM2 350M）は、いずれも多言語モデルを小さくしたもので、日本語の会話の基本（相手と自分の区別、訂正の保持、用語の意味）で崩れた。今回は、日本語で学習・調整されたものを中心に選んだ。
+
+| 候補 | 元のモデル | ファイル（固定リビジョン） | 容量 | ライセンス |
+| --- | --- | --- | --- | --- |
+| Sarashina2.2 0.5B | sbintuitions/sarashina2.2-0.5b-instruct-v0.1 | mmnga/sarashina2.2-0.5b-instruct-v0.1-gguf `5c71186` Q4_K_M | 528,204,672 bytes | MIT |
+| LFM2.5 1.2B JP | LiquidAI/LFM2.5-1.2B-JP-202606 | LiquidAI/LFM2.5-1.2B-JP-202606-GGUF `448ba3f` Q4_0 | 695,750,944 bytes | LFM Open License v1.0 |
+| Sarashina2.2 1B | sbintuitions/sarashina2.2-1b-instruct-v0.1 | mradermacher/sarashina2.2-1b-instruct-v0.1-GGUF `3d1e495` Q4_K_M | 931,179,872 bytes | MIT |
+| TinySwallow 1.5B | SakanaAI/TinySwallow-1.5B-Instruct | SakanaAI/TinySwallow-1.5B-Instruct-GGUF `38c003a` Q5_K_M | 1,125,051,232 bytes | Apache-2.0（Gemma Terms of Use も同梱） |
+
+追加した場面（`tests/quality-cases.mjs`）：用語の説明（define）、雑談（smalltalk）、話題の切り替え（switch）、訂正（fix）。合格の目安は、基本的な説明・雑談・訂正・話題変更の4つを通過すること。通過した候補だけを iPhone Safari で試す。
+
+`buildConversation` は 0.15.0 から、履歴を `selectHistory` で選び、訂正と利用者自身についての発言を最優先の事実として指示文に入れる。評価でも同じ関数を使うので、前回の結果との差には、モデルの違いとこの変更の両方が含まれる。
+
+### 手順（PC）
+
+```powershell
+# 例：Sarashina2.2 0.5B。ほかの候補も同じ手順でファイル名だけ変える
+$env:PLAYWRIGHT_MODULE = 'playwright'
+$env:QUALITY_MODEL = 'tests/.cache/quality/sarashina2.2-0.5b-instruct-v0.1-Q4_K_M.gguf'
+$env:QUALITY_OUTPUT = 'tests/.cache/quality/sarashina-0.5b-results.json'
+node tests/quality-eval.cjs
+```
+
+### 手順（iPhone Safari）
+
+PC の評価で4つの場面を通過した候補だけを試す。
+
+1. https://sin-skull.github.io/ai-safari/ の ☰ メニュー →「アプリを更新」で 0.15.0 にする。
+2. モデルで候補を選び、「会話を準備」を押す。初回は 0.5〜1.1GB をダウンロードする（Wi‑Fi）。
+3. 次の順に送る：辞書に無い言葉の意味（例：「冗長ってどういう意味？」）、「最近急に寒くなってきたね。」、「ゲームとは何？一言で。」→「扇風機の羽根の掃除のしかたを教えて。」、「東京タワーの高さは？」→「違うよ、333メートルだよ。改めて高さを教えて。」。
+4. 各回答の秒数と、読み込みの秒数を記録する（☰ メニュー →「診断」でも書き出せる。会話の本文は入らない）。
