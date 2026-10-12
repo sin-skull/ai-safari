@@ -37,7 +37,7 @@
     url: 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js',
     sha256: '8d6716d9086f57c30a4bf367dba61b887593573c770c454465e8019b2703e743',
   };
-  const LIB_CACHE = 'ai-lib-1'; // AI.store.LIB_CACHE と同じ名前
+  const LIB_CACHE = 'ai-safari-lib-1'; // AI.store.LIB_CACHE と同じ名前
   let libPromise = null;
 
   async function sha256Hex(buffer) {
@@ -96,6 +96,8 @@
     // 注意：allowRemoteModels を false にすると、Transformers.js は端末の保存分すら見ずにエラーにする
     // （「local も remote も無効」と判定される）。なので常に true にし、オフラインモード中は
     // 通信そのもの（env.fetch）を止める。保存分は通信より先に見られるので、端末にあれば読める。
+    lib.env.cacheKey = AI.store.MODEL_CACHE; // 元のaiのモデル/WASMキャッシュには触れない
+    lib.env.experimental_useCrossOriginStorage = false;
     lib.env.allowLocalModels = false;
     lib.env.allowRemoteModels = true;
     if (!defaultFetch) defaultFetch = lib.env.fetch;

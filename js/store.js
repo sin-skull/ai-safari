@@ -2,14 +2,14 @@
 //   ・何がどれだけ保存されているか調べる
 //   ・保存済みなら、もう一度ダウンロードしない（取得前にここで確かめる）
 //   ・いつでも、1つずつ端末から消せる
-// 保存先はブラウザの Cache Storage。実行用の本体は 'ai-lib-1'、モデルの重みは Transformers.js が 'transformers-cache' に置く。
+// 保存先はブラウザの Cache Storage。実行用の本体は 'ai-safari-lib-1'、モデルの重みは Transformers.js が 'ai-safari-transformers-cache' に置く。
 // 本体は意味検索と回答で共有する（同じものを2つは持たない）。
 (function (root) {
   'use strict';
   const AI = (root.AI = root.AI || {});
 
-  const LIB_CACHE = 'ai-lib-1';
-  const MODEL_CACHE = 'transformers-cache';
+  const LIB_CACHE = 'ai-safari-lib-1';
+  const MODEL_CACHE = 'ai-safari-transformers-cache';
 
   const cachesOf = (impl) => impl || root.caches || null;
 

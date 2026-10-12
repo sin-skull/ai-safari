@@ -1,0 +1,11 @@
+{
+  "name": "ai-safari",
+  "version": "0.11.4-safari.1",
+  "private": true,
+  "scripts": {
+    "test": "node tests/run-node.cjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5"
+  }
+}

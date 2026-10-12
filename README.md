@@ -1,4 +1,11 @@
-# ai
+# ai Safari
+
+`sin-skull/ai` のコードと履歴を複製した、iPhone 17 Safari向けの改修版です。元の開発とは別に進めます。
+
+- 固定した複製元: [UPSTREAM.json](UPSTREAM.json)
+- 改修方針と保存先: [docs/SAFARI_PLAN.md](docs/SAFARI_PLAN.md)
+- この段階では保存先を分離しました。以下の実装状況は元のアプリから継承したもので、改修版のiPhone実機確認はこれからです。
+
 
 オフラインでも使える、自作のAIアシスタント。
 
@@ -60,6 +67,8 @@
 `index.html` をブラウザで開くだけで動く（サーバー不要）。データはそのブラウザの IndexedDB に保存される。オフライン起動（Service Worker）と「ホーム画面に追加」は、https（または localhost）で開いたときだけ働く。
 
 ## テスト
+
+ロジックの回帰テストは `pnpm install --frozen-lockfile` → `pnpm test` で実行できます。Node版はIndexedDBを模擬し、ブラウザ専用のOPFS/WorkerテストとiPhone実機の動作確認は含みません。
 
 `tests/test.html` をブラウザで開くと、回帰テストが走る。
 

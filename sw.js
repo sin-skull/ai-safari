@@ -1,8 +1,8 @@
 // Service Worker：アプリ本体をキャッシュして、電波が無くても開けるようにする。
 // VERSION は index.html のスクリプトの ?v= と同じにする（tests で食い違いを検出）。
 // 外部（Wikipedia など）の通信はここでは扱わない。同じオリジンのファイルだけを対象にする。
-const VERSION = '0.11.4';
-const CACHE = `ai-${VERSION}`;
+const VERSION = '0.11.4-safari.1';
+const CACHE = `ai-safari-app-${VERSION}`;
 const FILES = [
   './index.html',
   './manifest.webmanifest',
@@ -18,12 +18,12 @@ self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));
 });
 
-// 古い版のキャッシュ（ai-0.7.0 のような名前）だけを消す。意味検索の本体など、他の保存先（ai-lib-1 など）は触らない
+// この改修版のアプリキャッシュだけを更新する。元のaiとモデル保存先には触れない
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => /^ai-\d+\.\d+\.\d+$/.test(k) && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('ai-safari-app-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -44,14 +44,14 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
           return response;
         })
-        .catch(() => caches.match('./index.html'))
+        .catch(() => caches.open(CACHE).then((cache) => cache.match('./index.html')))
     );
     return;
   }
 
   // それ以外（版番号つきのJS・画像など）：キャッシュ優先
   event.respondWith(
-    caches.match(request).then(
+    caches.open(CACHE).then((cache) => cache.match(request)).then(
       (hit) =>
         hit ||
         fetch(request).then((response) => {

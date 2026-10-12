@@ -833,7 +833,7 @@
   const TRY_KEY = 'answer-try';
   // ふつうに閉じた・再読み込みしたときは、目印を消す（落ちたときは、この処理は走らない）
   // 記憶（IndexedDB）への書き込みは閉じる瞬間には間に合わないので、すぐ書ける localStorage に時刻を残す
-  const CLEAN_KEY = 'ai-closed-normally';
+  const CLEAN_KEY = 'ai-safari-closed-normally';
   window.addEventListener('pagehide', () => {
     try {
       localStorage.setItem(CLEAN_KEY, String(Date.now()));

@@ -4,7 +4,7 @@
   'use strict';
   const AI = (root.AI = root.AI || {});
 
-  const DB_NAME = 'ai';
+  const DB_NAME = 'ai-safari';
   // スキーマの版。IndexedDB の version と settings.schemaVersion の両方に使う。
   // 上げるときは migrations に同じ番号の移行処理を足す（既存の番号は書き換えない）。
   const SCHEMA_VERSION = 1;

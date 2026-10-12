@@ -1,0 +1,13 @@
+{
+  "sourceRepository": "https://github.com/sin-skull/ai",
+  "sourceCommit": "658167a17313933ff3f90d228623e32d573b5414",
+  "sourceBranch": "main",
+  "copiedAt": "2026-10-13",
+  "baselineBranch": "upstream-baseline",
+  "baselineTag": "upstream-2026-10-13",
+  "targetRepository": "https://github.com/sin-skull/ai-safari",
+  "targetDevice": "iPhone 17",
+  "requiredBrowser": "Safari",
+  "offlineRequired": true,
+  "status": "isolated copy; conversation and offline speech improvements not yet implemented"
+}

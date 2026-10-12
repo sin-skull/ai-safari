@@ -41,13 +41,13 @@
   const HF = 'https://huggingface.co';
   const sample = () =>
     fakeCaches({
-      'transformers-cache': {
+      'ai-safari-transformers-cache': {
         [`${HF}/Xenova/multilingual-e5-small/resolve/main/config.json`]: 1000,
         [`${HF}/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx`]: 100 * 1024 * 1024,
         [`${HF}/onnx-community/Qwen2.5-0.5B-Instruct/resolve/main/config.json`]: 2000,
         [`${HF}/onnx-community/Qwen2.5-0.5B-Instruct/resolve/main/onnx/model_quantized.onnx`]: 500 * 1024 * 1024,
       },
-      'ai-lib-1': { 'https://cdn.jsdelivr.net/lib.js': 900000 },
+      'ai-safari-lib-1': { 'https://cdn.jsdelivr.net/lib.js': 900000 },
     });
 
   test('store: モデルごとに保存状況を調べる（別のモデルと混ざらない）', async () => {
@@ -64,7 +64,7 @@
   });
 
   test('store: 設定ファイルだけで重みが無いときは「保存済み」にしない（残りだけ取る）', async () => {
-    const c = fakeCaches({ 'transformers-cache': { [`${HF}/a/b/resolve/main/config.json`]: 10 } });
+    const c = fakeCaches({ 'ai-safari-transformers-cache': { [`${HF}/a/b/resolve/main/config.json`]: 10 } });
     const st = await AI.store.inspectModel('a/b', c);
     equal(st.cached, false);
     equal(st.files, 1);
