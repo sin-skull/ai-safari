@@ -14,6 +14,7 @@
 <body>
   <main>
     <header><div><span class="eyebrow">ON YOUR DEVICE</span><h1>ai <span>Safari</span></h1></div><a href="memory.html" id="memory-link">記憶・バックアップ ↗</a></header>
+    <div class="app-update"><button id="update-app" type="button">↻ アプリを更新</button><span id="update-status" role="status">オンラインで最新版を確認します。</span></div>
     <section class="setup" aria-label="会話の設定">
       <div class="setup-top"><label for="profile">使うモデル</label><span class="badge" id="connection">端末内で会話</span></div>
       <select id="profile"><option value="mobile">スマホ用 · Qwen3 0.6B / 約400MB</option><option value="pc">PC用 · Qwen3 0.6B / GPU</option><option value="tiny">最小・動作確認用 · LFM2 350M / 約230MB</option></select>
@@ -29,12 +30,13 @@
     </section>
     <form id="composer"><label class="sr-only" for="input">メッセージ</label><textarea id="input" rows="2" maxlength="4000" placeholder="話したいことを入力…" disabled></textarea><div class="composer-foot"><span>Shift + Enter で改行</span><button id="stop" type="button" hidden>止める</button><button id="send" class="primary" disabled>送信 ↑</button></div></form>
     <div class="footer-actions"><button id="new-chat" disabled>会話をリセット</button><button id="export-chat" disabled>会話を書き出す</button><button id="diagnostics" disabled>動作記録を書き出す</button><button id="delete-models" disabled>保存モデルを削除</button></div>
-    <footer><span>ai Safari 0.12.6 · 音声会話は今後対応</span><a href="lab/index.html" id="lab-link">試験室</a></footer>
+    <footer><span>ai Safari 0.12.7 · 音声会話は今後対応</span><a href="lab/index.html" id="lab-link">試験室</a></footer>
     <noscript>会話を使うにはJavaScriptを有効にしてください。</noscript>
   </main>
-  <script src="js/normalize.js?v=0.12.6"></script>
-  <script src="js/db.js?v=0.12.6"></script>
-  <script src="js/passages.js?v=0.12.6"></script>
+  <script src="js/normalize.js?v=0.12.7"></script>
+  <script src="js/db.js?v=0.12.7"></script>
+  <script src="js/passages.js?v=0.12.7"></script>
   <script type="module" src="js/conversation.mjs"></script>
+  <script type="module" src="js/app-update.mjs"></script>
 </body>
 </html>

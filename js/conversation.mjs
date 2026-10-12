@@ -2,7 +2,7 @@ import { PROFILES, ConversationEngine, buildConversation } from './conversation-
 import { NamespacedOPFSBackend } from '../lab/storage.js';
 import { configureRuntime } from './runtime-compat.mjs';
 
-const VERSION = '0.12.6';
+const VERSION = '0.12.7';
 const $ = (id) => document.getElementById(id);
 const KEY = 'ai-safari-conversation';
 const STEP = KEY + '-step';

@@ -1,7 +1,7 @@
 // Service Worker：アプリ本体をキャッシュして、電波が無くても開けるようにする。
 // VERSION は index.html のスクリプトの ?v= と同じにする（tests で食い違いを検出）。
 // 外部（Wikipedia など）の通信はここでは扱わない。同じオリジンのファイルだけを対象にする。
-const VERSION = '0.12.6';
+const VERSION = '0.12.7';
 const CACHE = `ai-safari-app-${VERSION}`;
 const FILES = [
   './index.html',
@@ -10,6 +10,7 @@ const FILES = [
   './js/conversation.mjs',
   './js/conversation-core.mjs',
   './js/runtime-compat.mjs',
+  './js/app-update.mjs',
   './lab/index.html',
   './lab/storage.js',
   './lab/vendor/wllama-3.6.1/index.js',
@@ -27,7 +28,7 @@ const FILES = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES.map((path) => new Request(new URL(path, self.location.href), { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 // この改修版のアプリキャッシュだけを更新する。元のaiとモデル保存先には触れない

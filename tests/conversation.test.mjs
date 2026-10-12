@@ -92,8 +92,8 @@ test('failed release prevents allocation of a second model', async () => {
 });
 test('service-worker precache contains all imported runtime files and separates navigation pages', async () => {
   const handlers = {}, added = [], lookedUp = [];
-  const cache = { addAll: async (paths) => added.push(...paths), match: async (path) => { lookedUp.push(path); return new Response(path); } };
-  const context = { URL, Response, fetch: () => { throw new Error('network not allowed'); },
+  const cache = { addAll: async (requests) => { for (const r of requests) { assert.equal(r.cache, 'reload'); added.push('./' + new URL(r.url).pathname.split('/ai-safari/')[1]); } }, match: async (path) => { lookedUp.push(path); return new Response(path); } };
+  const context = { URL, Response, Request, fetch: () => { throw new Error('network not allowed'); },
     caches: { open: async () => cache },
     self: { location: new URL('https://test.invalid/ai-safari/sw.js'), addEventListener: (n, h) => { handlers[n] = h; }, skipWaiting: async () => {} },
   };
